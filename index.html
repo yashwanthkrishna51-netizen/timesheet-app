@@ -666,7 +666,7 @@
     async function getFileFromGitHub(filePath) {
         try {
             const response = await fetch(
-                `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${filePath}?ref=${GITHUB_CONFIG.branch}`,
+                `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/${filePath}?ref=${GITHUB_CONFIG.branch}`,
                 {
                     headers: {
                         'Authorization': `token ${GITHUB_CONFIG.token}`,

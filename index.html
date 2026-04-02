@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timesheet Management System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* ===== LOGIN ===== */
+        .login-screen {
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh;
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            z-index: 1000;
+        }
+        .login-card {
+            background: white; border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px; width: 100%; max-width: 400px;
+        }
+        .login-card h1 { color: #333; text-align: center; font-size: 28px; margin-bottom: 8px; }
+        .login-card .subtitle { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px; }
+        .form-group input {
+            width: 100%; padding: 12px 15px;
+            border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+        .login-btn {
+            width: 100%; padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border: none; border-radius: 8px;
+            font-weight: 600; cursor: pointer; font-size: 14px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .login-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(102,126,234,0.4); }
+        .error-message { color: #e74c3c; font-size: 12px; margin-top: 10px; text-align: center; display: none; }
+
+        /* ===== APP ===== */
+        .hidden { display: none !important; }
+        .app-container {
+            background: white; border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden; max-width: 1600px; margin: 0 auto;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 18px 28px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .header h1 { font-size: 20px; }
+        .user-info { display: flex; align-items: center; gap: 10px; }
+        .user-badge { background: rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+        .user-badge.admin { background: #ff6b6b; font-weight: 600; }
+        .logout-btn { background: rgba(255,255,255,0.25); color: white; border: none; padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .logout-btn:hover { background: rgba(255,255,255,0.4); }
+
+        .content { padding: 22px 28px; }
+
+        /* ===== TABS ===== */
+        .tabs { display: flex; gap: 4px; margin-bottom: 22px; border-bottom: 2px solid #e0e0e0; }
+        .tab-btn {
+            padding: 10px 20px; background: none; border: none;
+            cursor: pointer; font-size: 14px; font-weight: 500;
+            color: #999; border-bottom: 3px solid transparent;
+            transition: all 0.2s; position: relative; top: 2px;
+        }
+        .tab-btn.active { color: #667eea; border-bottom-color: #667eea; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ===== MESSAGES ===== */
+        .success-message {
+            background: #d4edda; color: #155724;
+            padding: 11px 15px; border-radius: 6px; margin-bottom: 18px;
+            display: none; border: 1px solid #c3e6cb; font-size: 13px;
+        }
+        .success-message.show { display: block; }
+
+        /* ===== BUTTONS ===== */
+        .btn {
+            padding: 9px 18px; border: none; border-radius: 7px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 15px rgba(102,126,234,0.3); }
+        .btn-secondary { background: #f0f4ff; color: #667eea; border: 1px solid #c4ceff; }
+        .btn-secondary:hover { background: #e4eaff; }
+        .btn-small { padding: 6px 12px; font-size: 12px; }
+        .btn-icon-danger {
+            background: #fff0f0; color: #e74c3c; border: 1px solid #f5c6c6;
+            padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-icon-danger:hover { background: #ffe0e0; }
+        .button-group { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+        .file-input { display: none; }
+
+        /* ===== DAY VIEW ===== */
+        .day-controls {
+            display: flex; align-items: center; gap: 14px;
+            margin-bottom: 18px; flex-wrap: wrap;
+        }
+        .day-controls label { font-weight: 600; color: #444; white-space: nowrap; font-size: 14px; }
+        .day-controls input[type="date"] {
+            padding: 8px 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; cursor: pointer;
+        }
+        .day-controls input[type="date"]:focus { outline: none; border-color: #667eea; }
+        .daily-total-badge {
+            padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 600;
+            background: #f0f4ff; color: #667eea; border: 1px solid #c4ceff;
+        }
+        .daily-total-badge.ok { background: #d4edda; color: #155724; border-color: #b8dfc4; }
+        .daily-total-badge.warn { background: #fff3cd; color: #856404; border-color: #ffe19a; }
+
+        /* ===== ACTIVITY-AS-COLUMNS TABLE ===== */
+        .entries-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 4px; }
+        .entries-table { width: 100%; border-collapse: collapse; min-width: 900px; }
+        .entries-table th {
+            background: #f8f9fa; padding: 10px 12px;
+            text-align: left; font-weight: 600; color: #444; font-size: 11px;
+            border-bottom: 2px solid #e0e0e0; text-transform: uppercase; letter-spacing: 0.4px;
+            white-space: nowrap;
+        }
+        .entries-table th.act-header {
+            background: linear-gradient(135deg, #667eea15, #764ba215);
+            color: #667eea; text-align: center; font-size: 10px;
+            border-left: 1px solid #e0e0e0;
+        }
+        .entries-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+        .entries-table tr:hover td { background: #fafafa; }
+        .entries-table td.act-cell {
+            border-left: 1px solid #f0f0f0; text-align: center; padding: 7px 6px;
+        }
+
+        .entry-input {
+            width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 5px;
+            font-size: 13px; font-family: inherit; background: white;
+        }
+        .entry-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 2px rgba(102,126,234,0.1); }
+        .ticket-col { width: 130px; }
+        .notes-col { min-width: 160px; }
+        .hours-act-input {
+            width: 64px; padding: 6px 6px; border: 1px solid #ddd; border-radius: 5px;
+            font-size: 13px; text-align: center; font-family: inherit; background: white;
+        }
+        .hours-act-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 2px rgba(102,126,234,0.1); }
+        .hours-act-input:not([value=""]):not([value="0"]) { background: #f0f4ff; border-color: #c4ceff; font-weight: 600; color: #667eea; }
+        .action-col { width: 44px; }
+
+        /* ===== WEEKLY VIEW ===== */
+        .week-controls {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 18px; flex-wrap: wrap; gap: 12px;
+        }
+        .week-controls-left { display: flex; align-items: center; gap: 10px; }
+        .week-controls-left label { font-weight: 600; color: #444; font-size: 14px; }
+        .week-controls-left input[type="week"] {
+            padding: 8px 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;
+        }
+        .week-controls-left input[type="week"]:focus { outline: none; border-color: #667eea; }
+
+        .hours-widget {
+            display: flex; align-items: center; gap: 0;
+            background: white; border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden;
+        }
+        .hw-item { padding: 12px 20px; text-align: center; }
+        .hw-item + .hw-item { border-left: 1px solid #f0f0f0; }
+        .hw-label { font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+        .hw-value { font-size: 20px; font-weight: 700; color: #333; }
+        .hw-item.available .hw-value { color: #667eea; }
+        .hw-item.worked .hw-value { color: #764ba2; }
+        .hw-item.positive .hw-value { color: #27ae60; }
+        .hw-item.negative .hw-value { color: #e74c3c; }
+        .hw-item.positive .hw-label { color: #27ae60; }
+        .hw-item.negative .hw-label { color: #e74c3c; }
+
+        .weekly-table-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid #e8e8e8; }
+        .pivot-table { width: 100%; border-collapse: collapse; min-width: 680px; }
+        .pivot-table thead tr { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .pivot-table th { padding: 13px 14px; color: white; font-weight: 600; font-size: 13px; text-align: center; }
+        .pivot-table th:first-child { text-align: left; min-width: 160px; }
+        .day-date { font-size: 10px; opacity: 0.75; display: block; font-weight: 400; margin-top: 2px; }
+        .pivot-table td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; text-align: center; font-size: 13px; }
+        .pivot-table td:first-child { text-align: left; }
+        .pivot-table tbody tr:hover td { background: #f8f9fa; }
+        .ticket-cell { font-weight: 700; color: #333; font-size: 13px; }
+        .hours-cell.has-hours { background: #f0f4ff; }
+        .cell-hours { display: block; font-weight: 700; color: #667eea; font-size: 14px; }
+        .cell-activity { display: block; font-size: 10px; color: #999; margin-top: 2px; line-height: 1.4; }
+        .row-total { font-weight: 700; color: #333; background: #f8f9fa !important; font-size: 14px; }
+        .day-total { font-weight: 700; }
+        .day-total.ok { color: #27ae60; }
+        .day-total.warn { color: #e67e22; }
+        .grand-total { font-weight: 800; color: #667eea; font-size: 15px; background: #f8f9fa; }
+        .footer-label { text-align: left !important; color: #555; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .empty-pivot { text-align: center; color: #aaa; padding: 40px; font-size: 14px; font-style: italic; }
+
+        /* ===== ANALYTICS ===== */
+        .analytics-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+        .analytics-top h2 { font-size: 18px; color: #333; }
+        .filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .filter-row label { font-size: 13px; font-weight: 600; color: #444; }
+        .filter-row input[type="date"] { padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+        .filter-row input[type="date"]:focus { outline: none; border-color: #667eea; }
+
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 24px; }
+        .metric-card { background: #f8f9fa; border-radius: 10px; padding: 18px 16px; border: 1px solid #e8e8e8; }
+        .metric-card h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 8px; }
+        .metric-card .value { font-size: 28px; font-weight: 800; color: #333; }
+
+        .section-title { font-size: 14px; font-weight: 700; color: #444; text-transform: uppercase; letter-spacing: 0.5px; margin: 24px 0 12px; padding-bottom: 6px; border-bottom: 2px solid #e0e0e0; }
+
+        /* Ticket cards */
+        .ticket-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+        .ticket-card { border: 1px solid #e8e8e8; border-radius: 8px; overflow: hidden; }
+        .ticket-card-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; cursor: pointer; background: white; user-select: none;
+            transition: background 0.15s;
+        }
+        .ticket-card-header:hover { background: #fafafa; }
+        .ticket-card-header-left { display: flex; align-items: center; gap: 12px; }
+        .ticket-id { font-weight: 700; color: #333; font-size: 14px; }
+        .ticket-total { font-size: 13px; color: #667eea; font-weight: 600; }
+        .expand-icon { color: #aaa; font-size: 12px; transition: transform 0.2s; }
+        .expand-icon.open { transform: rotate(180deg); }
+        .ticket-card-body { display: none; border-top: 1px solid #f0f0f0; }
+        .ticket-card-body.open { display: block; }
+
+        /* Analytics: activity breakdown table */
+        .summary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .summary-table th { background: #f8f9fa; padding: 10px 13px; text-align: left; font-weight: 600; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 2px solid #e0e0e0; }
+        .summary-table th.num-col { text-align: right; }
+        .summary-table td { padding: 9px 13px; border-bottom: 1px solid #f5f5f5; }
+        .summary-table td.num-col { text-align: right; }
+        .summary-table tr:hover td { background: #fafafa; }
+        .act-pill {
+            display: inline-block; padding: 2px 8px; border-radius: 12px;
+            font-size: 11px; font-weight: 600; background: #f0f4ff; color: #667eea;
+            border: 1px solid #c4ceff; white-space: nowrap;
+        }
+        .no-data { text-align: center; color: #aaa; padding: 40px; font-style: italic; font-size: 14px; }
+
+        /* Member summary activity breakdown */
+        .member-act-grid { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+        .member-act-item { font-size: 11px; background: #f5f5f5; border-radius: 10px; padding: 2px 8px; color: #666; }
+
+        /* ===== ANALYTICS: ACTIVITY CHART ROW ===== */
+        .act-bar-cell { padding: 8px 13px !important; }
+        .act-bar-wrap { display: flex; align-items: center; gap: 6px; }
+        .act-bar-bg { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+        .act-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg,#667eea,#764ba2); transition: width 0.4s; }
+        .act-bar-label { font-size: 12px; font-weight: 600; color: #667eea; min-width: 40px; text-align: right; }
+
+        /* ===== MODAL ===== */
+        .modal {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 500;
+            display: none; align-items: center; justify-content: center; padding: 20px;
+        }
+        .modal.show { display: flex; }
+        .modal-content { background: white; border-radius: 12px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+        .modal-header { padding: 18px 20px; font-weight: 700; font-size: 16px; border-bottom: 1px solid #e0e0e0; color: #333; }
+        .modal-body { padding: 18px 20px; }
+        .modal-body p { font-size: 13px; color: #555; margin-bottom: 10px; }
+        .modal-body textarea { width: 100%; height: 240px; resize: vertical; border: 1px solid #ddd; border-radius: 6px; padding: 10px; font-size: 12px; font-family: monospace; color: #333; }
+        .modal-footer { padding: 14px 20px; border-top: 1px solid #e0e0e0; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+        /* Import append modal */
+        .import-file-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; }
+        .import-file-item { display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; border-radius: 6px; padding: 7px 12px; font-size: 13px; }
+        .import-file-item .fname { font-weight: 600; color: #333; }
+        .import-file-item .fstatus { font-size: 11px; color: #888; }
+        .import-file-item.success .fstatus { color: #27ae60; }
+        .import-file-item.error .fstatus { color: #e74c3c; }
+
+        @media (max-width: 700px) {
+            .content { padding: 14px; }
+            .analytics-top { flex-direction: column; }
+            .hours-widget { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="login-screen">
+    <div class="login-card">
+        <h1>⏱️ Timesheet</h1>
+        <div class="subtitle">Sign in to manage your time</div>
+        <form onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" placeholder="Enter your username" required autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Enter your password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="login-btn">Sign In</button>
+            <div class="error-message" id="errorMessage">Invalid username or password</div>
+        </form>
+    </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="appContainer" class="app-container hidden">
+    <div class="header">
+        <h1>⏱️ Timesheet Management</h1>
+        <div class="user-info">
+            <div class="user-badge" id="userDisplay"></div>
+            <div class="user-badge admin" id="adminBadge" style="display:none">Admin</div>
+            <button class="logout-btn" onclick="handleLogout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="success-message" id="successMessage"></div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="timesheet" onclick="switchTab('timesheet', this)">My Timesheet</button>
+            <button class="tab-btn" data-tab="weeklyView" onclick="switchTab('weeklyView', this)">Weekly View</button>
+            <button class="tab-btn hidden" id="adminTabBtn" data-tab="admin" onclick="switchTab('admin', this)">Team Analytics</button>
+        </div>
+
+        <!-- MY TIMESHEET (DAY VIEW) -->
+        <div id="timesheet" class="tab-content active">
+            <div class="day-controls">
+                <label for="datePicker">Date:</label>
+                <input type="date" id="datePicker" onchange="loadDayEntries()">
+                <div id="dailyTotalBadge" class="daily-total-badge">Total: 0h / 8h</div>
+            </div>
+
+            <div class="entries-wrapper">
+                <table class="entries-table" id="entriesTable">
+                    <thead id="entriesHead">
+                        <!-- built dynamically -->
+                    </thead>
+                    <tbody id="entriesBody"></tbody>
+                </table>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-secondary" onclick="addEntry()">+ Add Row</button>
+                <button class="btn btn-primary" onclick="saveDay()">💾 Save</button>
+                <button class="btn btn-secondary" onclick="openExportModal()">📥 Export JSON</button>
+                <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">📤 Import JSON</button>
+                <input type="file" id="importFile" class="file-input" accept=".json" onchange="importTimesheet(event)">
+            </div>
+        </div>
+
+        <!-- WEEKLY VIEW -->
+        <div id="weeklyView" class="tab-content">
+            <div class="week-controls">
+                <div class="week-controls-left">
+                    <label for="weekPicker">Week:</label>
+                    <input type="week" id="weekPicker" onchange="loadWeeklyView()">
+                </div>
+                <div class="hours-widget" id="hoursWidget">
+                    <div class="hw-item available">
+                        <div class="hw-label">Available</div>
+                        <div class="hw-value">40h</div>
+                    </div>
+                    <div class="hw-item worked">
+                        <div class="hw-label">Worked</div>
+                        <div class="hw-value" id="workedHours">0h</div>
+                    </div>
+                    <div class="hw-item" id="remainingItem">
+                        <div class="hw-label" id="remainingLabel">Remaining</div>
+                        <div class="hw-value" id="remainingHours">40h</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="weekly-table-wrapper">
+                <table class="pivot-table" id="pivotTable">
+                    <tr><td class="empty-pivot" colspan="7">Select a week to view your timesheet</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- TEAM ANALYTICS (ADMIN ONLY) -->
+        <div id="admin" class="tab-content">
+            <div class="analytics-top">
+                <h2>Team Analytics</h2>
+                <div class="filter-row">
+                    <label>From:</label>
+                    <input type="date" id="filterFrom">
+                    <label>To:</label>
+                    <input type="date" id="filterTo">
+                    <button class="btn btn-secondary btn-small" onclick="loadAdminDashboard()">Apply</button>
+                    <button class="btn btn-secondary btn-small" onclick="clearAnalyticsFilter()">Clear</button>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="metric-card"><h3>Total Hours Logged</h3><div class="value" id="totalHours">0</div></div>
+                <div class="metric-card"><h3>Active Members</h3><div class="value" id="teamCount">0</div></div>
+                <div class="metric-card"><h3>Unique Tickets</h3><div class="value" id="ticketCount">0</div></div>
+                <div class="metric-card"><h3>Avg Hours / Member</h3><div class="value" id="avgHours">0</div></div>
+            </div>
+
+            <div class="section-title">Activity Breakdown (Team-wide)</div>
+            <table class="summary-table" id="activityBreakdownTable">
+                <thead><tr>
+                    <th>Activity</th>
+                    <th class="num-col">Hours</th>
+                    <th class="num-col">% of Total</th>
+                    <th style="min-width:180px">Distribution</th>
+                </tr></thead>
+                <tbody id="activityBreakdownBody"></tbody>
+            </table>
+
+            <div class="section-title">Ticket-wise Consolidated View</div>
+            <div class="ticket-cards" id="ticketCards"></div>
+
+            <div class="section-title">Member Summary</div>
+            <table class="summary-table">
+                <thead><tr>
+                    <th>Member</th>
+                    <th class="num-col">Total Hours</th>
+                    <th class="num-col">Log Entries</th>
+                    <th class="num-col">Tickets Worked</th>
+                    <th>Activity Breakdown</th>
+                </tr></thead>
+                <tbody id="memberSummary"></tbody>
+            </table>
+
+            <div class="button-group">
+                <button class="btn btn-secondary" onclick="document.getElementById('importTeamFiles').click()">📤 Import &amp; Append JSONs</button>
+                <input type="file" id="importTeamFiles" class="file-input" accept=".json" multiple onchange="importTeamData(event)">
+                <button class="btn btn-secondary" onclick="openAdminExportModal()">📥 Export Analytics</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Export Modal -->
+<div id="exportModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">Export My Timesheet as JSON</div>
+        <div class="modal-body">
+            <p>Only your data is included. Share this file with your admin.</p>
+            <textarea id="exportData" readonly></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary btn-small" onclick="copyToClipboard('exportData')">📋 Copy</button>
+            <button class="btn btn-primary btn-small" onclick="downloadJSON('timesheet')">⬇️ Download</button>
+            <button class="btn btn-secondary btn-small" onclick="closeModal('exportModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Export Modal -->
+<div id="adminExportModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">Export Analytics as JSON</div>
+        <div class="modal-body">
+            <p>Full team analytics export (all members with data):</p>
+            <textarea id="adminExportData" readonly></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary btn-small" onclick="copyToClipboard('adminExportData')">📋 Copy</button>
+            <button class="btn btn-primary btn-small" onclick="downloadJSON('analytics')">⬇️ Download</button>
+            <button class="btn btn-secondary btn-small" onclick="closeModal('adminExportModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Import Result Modal (Admin) -->
+<div id="importResultModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">Import Results</div>
+        <div class="modal-body">
+            <p id="importResultSummary"></p>
+            <div class="import-file-list" id="importFileList"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary btn-small" onclick="closeModal('importResultModal')">Done</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ============================================================
+    // CONSTANTS
+    // ============================================================
+
+    const USERS = {
+        yashwanth:   { password: 'password123', admin: true },
+        ved:         { password: 'password123', admin: true },
+        harsha:      { password: 'password123', admin: false },
+        bhalchandra: { password: 'password123', admin: false }
+    };
+
+    const ACTIVITY_TYPES = [
+        'BPM + Functional',
+        'Solutioning',
+        'Int Dev + SIT / Func Configuration',
+        'Client UAT',
+        'Rework',
+        'Internal',
+        'Governance'
+    ];
+
+    // Palette for activity pills in analytics
+    const ACT_COLORS = [
+        '#667eea','#764ba2','#27ae60','#e67e22','#e74c3c','#16a085','#2980b9'
+    ];
+
+    let currentUser = null;
+    let currentUserIsAdmin = false;
+
+    // ============================================================
+    // AUTH
+    // ============================================================
+
+    function handleLogin(event) {
+        event.preventDefault();
+        const username = document.getElementById('username').value.trim().toLowerCase();
+        const password = document.getElementById('password').value;
+        const errorMsg = document.getElementById('errorMessage');
+
+        if (USERS[username] && USERS[username].password === password) {
+            currentUser = username;
+            currentUserIsAdmin = USERS[username].admin;
+            errorMsg.style.display = 'none';
+            loginSuccess();
+        } else {
+            errorMsg.style.display = 'block';
+            document.getElementById('password').value = '';
+        }
+    }
+
+    async function loginSuccess() {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('appContainer').classList.remove('hidden');
+        document.getElementById('userDisplay').textContent = '👤 ' + currentUser;
+        document.getElementById('adminBadge').style.display = currentUserIsAdmin ? 'inline-block' : 'none';
+        document.getElementById('adminTabBtn').classList.toggle('hidden', !currentUserIsAdmin);
+
+        // Load tickets from CSV
+        allTickets = await loadTicketsFromCSV();
+        populateTicketDatalist();
+
+        buildEntryTableHeader();
+
+        const today = new Date();
+        document.getElementById('datePicker').value = dateToKey(today);
+        await loadDayEntries();
+
+        const monday = getMondayOfWeek(today);
+        const isoWeek = getISOWeekStr(monday);
+        document.getElementById('weekPicker').value = isoWeek;
+    }
+
+    function populateTicketDatalist() {
+        const datalist = document.getElementById('ticketList') || createTicketDatalist();
+        datalist.innerHTML = '';
+        allTickets.forEach(ticket => {
+            const option = document.createElement('option');
+            option.value = ticket.id;
+            option.textContent = ticket.displayText;
+            datalist.appendChild(option);
+        });
+    }
+
+    function createTicketDatalist() {
+        const datalist = document.createElement('datalist');
+        datalist.id = 'ticketList';
+        document.body.appendChild(datalist);
+        return datalist;
+    }
+
+    function handleLogout() {
+        currentUser = null;
+        currentUserIsAdmin = false;
+        document.getElementById('appContainer').classList.add('hidden');
+        document.getElementById('loginScreen').classList.remove('hidden');
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById('timesheet').classList.add('active');
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector('.tab-btn[data-tab="timesheet"]').classList.add('active');
+    }
+
+    // ============================================================
+    // DATE UTILS
+    // ============================================================
+
+    function dateToKey(d) {
+        return d.getFullYear() + '-' +
+            String(d.getMonth() + 1).padStart(2,'0') + '-' +
+            String(d.getDate()).padStart(2,'0');
+    }
+
+    function getMondayOfWeek(d) {
+        const day = d.getDay() || 7;
+        const monday = new Date(d);
+        monday.setDate(d.getDate() - day + 1);
+        return monday;
+    }
+
+    function getISOWeekStr(monday) {
+        // returns "YYYY-Www"
+        const jan4 = new Date(monday.getFullYear(), 0, 4);
+        const dayOfJan4 = jan4.getDay() || 7;
+        const mondayWk1 = new Date(jan4);
+        mondayWk1.setDate(jan4.getDate() - dayOfJan4 + 1);
+        const diff = monday - mondayWk1;
+        const week = Math.round(diff / 604800000) + 1;
+        return monday.getFullYear() + '-W' + String(week).padStart(2,'0');
+    }
+
+    function getDaysForWeek(weekStr) {
+        const parts = weekStr.split('-W');
+        const year = parseInt(parts[0]);
+        const week = parseInt(parts[1]);
+        const jan4 = new Date(year, 0, 4);
+        const dayOfJan4 = jan4.getDay() || 7;
+        const mondayWk1 = new Date(jan4);
+        mondayWk1.setDate(jan4.getDate() - dayOfJan4 + 1);
+        const monday = new Date(mondayWk1);
+        monday.setDate(mondayWk1.getDate() + (week - 1) * 7);
+        const names = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+        return names.map((name, i) => {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + i);
+            return { name, date: d.toLocaleDateString('en-US', { month:'short', day:'numeric' }), key: dateToKey(d) };
+        });
+    }
+
+    // ============================================================
+    // GITHUB API CONFIGURATION
+    // ============================================================
+
+    const GITHUB_CONFIG = {
+        owner: 'yashwanthkrishna51-netizen',        // e.g., yashwanth-darwinbox
+        repo: 'timesheet-data',                // Your private repo name
+        token: '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',            // Your personal access token
+        branch: 'main',
+        timesheetsFile: 'data/timesheets.json',
+        ticketsFile: 'tickets/tickets.csv'
+    };
+
+    // ============================================================
+    // GITHUB API FUNCTIONS
+    // ============================================================
+
+    async function getFileFromGitHub(filePath) {
+        try {
+            const response = await fetch(
+                `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${filePath}?ref=${GITHUB_CONFIG.branch}`,
+                {
+                    headers: {
+                        'Authorization': `token ${GITHUB_CONFIG.token}`,
+                        'Accept': 'application/vnd.github.v3.raw'
+                    }
+                }
+            );
+
+            if (response.status === 404) {
+                return null;
+            }
+
+            if (!response.ok) {
+                throw new Error(`GitHub API error: ${response.status}`);
+            }
+
+            return await response.text();
+        } catch (error) {
+            console.error(`Error fetching ${filePath}:`, error);
+            return null;
+        }
+    }
+
+    async function saveFileToGitHub(filePath, content, message) {
+        try {
+            const currentFile = await fetch(
+                `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${filePath}?ref=${GITHUB_CONFIG.branch}`,
+                {
+                    headers: {
+                        'Authorization': `token ${GITHUB_CONFIG.token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                }
+            );
+
+            let sha = null;
+            if (currentFile.ok) {
+                const data = await currentFile.json();
+                sha = data.sha;
+            }
+
+            const updateResponse = await fetch(
+                `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${filePath}`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${GITHUB_CONFIG.token}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/vnd.github.v3+json'
+                    },
+                    body: JSON.stringify({
+                        message: message || `Update ${filePath}`,
+                        content: btoa(content),
+                        branch: GITHUB_CONFIG.branch,
+                        ...(sha && { sha })
+                    })
+                }
+            );
+
+            if (!updateResponse.ok) {
+                const error = await updateResponse.json();
+                throw new Error(error.message || 'Failed to save to GitHub');
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error saving to GitHub:', error);
+            showSuccess('⚠ Error saving to GitHub: ' + error.message, true);
+            return false;
+        }
+    }
+
+    async function getAllTimesheetsFromGitHub() {
+        const content = await getFileFromGitHub(GITHUB_CONFIG.timesheetsFile);
+        if (!content) {
+            return {
+                lastUpdated: new Date().toISOString(),
+                yashwanth: {},
+                ved: {},
+                harsha: {},
+                bhalchandra: {}
+            };
+        }
+        try {
+            return JSON.parse(content);
+        } catch (e) {
+            console.error('Error parsing timesheets:', e);
+            return {};
+        }
+    }
+
+    // ============================================================
+    // DATA ACCESS
+    // ============================================================
+
+    async function getTimesheetData(username) {
+        const allTimesheets = await getAllTimesheetsFromGitHub();
+        const raw = allTimesheets[username];
+        if (!raw) return {};
+        return migrateData(raw);
+    }
+
+    async function saveTimesheetData(username, data) {
+        const allTimesheets = await getAllTimesheetsFromGitHub();
+        allTimesheets[username] = data;
+        allTimesheets.lastUpdated = new Date().toISOString();
+
+        const content = JSON.stringify(allTimesheets, null, 2);
+        return await saveFileToGitHub(
+            GITHUB_CONFIG.timesheetsFile,
+            content,
+            `Update timesheet for ${username}`
+        );
+    }
+
+    // Ticket CSV functions
+    async function loadTicketsFromCSV() {
+        const csvContent = await getFileFromGitHub(GITHUB_CONFIG.ticketsFile);
+        if (!csvContent) return [];
+        return parseCSV(csvContent);
+    }
+
+    function parseCSV(csvContent) {
+        const lines = csvContent.trim().split('\n');
+        if (lines.length < 2) return [];
+
+        const headers = lines[0].split(',').map(h => h.trim());
+        const ticketIdIndex = headers.indexOf('Ticket ID');
+        const subjectIndex = headers.indexOf('Ticket Subject');
+
+        const tickets = [];
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line.trim()) continue;
+
+            const parts = parseCSVLine(line);
+            if (parts.length > Math.max(ticketIdIndex, subjectIndex)) {
+                const ticketId = parts[ticketIdIndex]?.trim() || '';
+                const subject = parts[subjectIndex]?.trim() || '';
+
+                if (ticketId) {
+                    tickets.push({
+                        id: ticketId,
+                        subject: subject,
+                        displayText: `${ticketId} - ${subject}`
+                    });
+                }
+            }
+        }
+
+        return tickets;
+    }
+
+    function parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let insideQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+
+            if (char === '"') {
+                insideQuotes = !insideQuotes;
+            } else if (char === ',' && !insideQuotes) {
+                result.push(current);
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+
+        result.push(current);
+        return result;
+    }
+
+    function getHappyFoxTicketUrl(ticketId) {
+        const strippedId = ticketId.replace(/[A-Za-z-]/g, '');
+        return `https://askdarwin.darwinbox.com/staff/ticket/${strippedId}`;
+    }
+
+    let allTickets = [];
+
+    function migrateData(data) {
+        const out = {};
+        for (const date in data) {
+            const val = data[date];
+            if (Array.isArray(val)) {
+                // Migrate old entries that stored activity as string to new activityHours map
+                out[date] = val.map(e => {
+                    if (e.activityHours) return e; // already new format
+                    // Old format: { ticket, activity, hours, notes }
+                    const ah = {};
+                    if (e.activity && e.hours) ah[e.activity] = parseFloat(e.hours) || 0;
+                    return { ticket: e.ticket||'', activityHours: ah, notes: e.notes||'' };
+                });
+            } else if (val && typeof val === 'object') {
+                if (val.hours || val.ticket || val.activity) {
+                    const ah = {};
+                    if (val.activity && val.hours) ah[val.activity] = parseFloat(val.hours) || 0;
+                    out[date] = [{ ticket: val.ticket||'', activityHours: ah, notes: val.notes||'' }];
+                }
+            }
+        }
+        return out;
+    }
+
+    // Deep merge: append dates from source into dest (existing dates: merge entries; new dates: add)
+    function mergeTimesheetData(dest, source) {
+        for (const date in source) {
+            if (!dest[date]) {
+                dest[date] = source[date];
+            } else {
+                // Append entries that don't already exist (match by ticket + same activityHours)
+                const existing = dest[date];
+                source[date].forEach(srcEntry => {
+                    const dup = existing.find(e =>
+                        e.ticket === srcEntry.ticket &&
+                        JSON.stringify(e.activityHours) === JSON.stringify(srcEntry.activityHours)
+                    );
+                    if (!dup) existing.push(srcEntry);
+                });
+            }
+        }
+        return dest;
+    }
+
+    // ============================================================
+    // MY TIMESHEET — ENTRY TABLE HEADER (ACTIVITY COLUMNS)
+    // ============================================================
+
+    function buildEntryTableHeader() {
+        const head = document.getElementById('entriesHead');
+        let html = '<tr>';
+        html += '<th class="ticket-col">Ticket ID</th>';
+        ACTIVITY_TYPES.forEach(a => {
+            html += '<th class="act-header" title="' + escHtml(a) + '">' + escHtml(a) + '</th>';
+        });
+        html += '<th class="notes-col">Notes</th>';
+        html += '<th class="action-col"></th>';
+        html += '</tr>';
+        head.innerHTML = html;
+    }
+
+    // ============================================================
+    // MY TIMESHEET — DAY VIEW
+    // ============================================================
+
+    async function loadDayEntries() {
+        const date = document.getElementById('datePicker').value;
+        if (!date) return;
+
+        const data = await getTimesheetData(currentUser);
+        const entries = data[date] || [];
+        const tbody = document.getElementById('entriesBody');
+        tbody.innerHTML = '';
+
+        if (entries.length === 0) {
+            renderEntryRow({ ticket: '', activityHours: {}, notes: '' });
+        } else {
+            entries.forEach(e => renderEntryRow(e));
+        }
+        updateDailyTotal();
+    }
+
+    function addEntry() {
+        renderEntryRow({ ticket: '', activityHours: {}, notes: '' });
+        updateDailyTotal();
+    }
+
+    function renderEntryRow(entry) {
+        const tbody = document.getElementById('entriesBody');
+        const tr = document.createElement('tr');
+
+        let html = '<td class="ticket-col"><input type="text" class="entry-input entry-ticket" placeholder="TKT-123" value="' + escHtml(entry.ticket || '') + '" list="ticketList"></td>';
+
+        ACTIVITY_TYPES.forEach(a => {
+            const val = (entry.activityHours && entry.activityHours[a]) ? entry.activityHours[a] : '';
+            const filled = val !== '' && val !== 0 && val !== '0';
+            html += '<td class="act-cell">' +
+                '<input type="number" class="hours-act-input act-hours" data-activity="' + escHtml(a) + '" ' +
+                'placeholder="—" value="' + (val || '') + '" step="0.5" min="0" max="24" ' +
+                (filled ? 'style="background:#f0f4ff;border-color:#c4ceff;font-weight:600;color:#667eea"' : '') +
+                ' oninput="onActHoursInput(this)">' +
+                '</td>';
+        });
+
+        html += '<td class="notes-col"><input type="text" class="entry-input entry-notes" placeholder="Notes..." value="' + escHtml(entry.notes || '') + '"></td>';
+        html += '<td><button class="btn-icon-danger" onclick="removeEntry(this)" title="Remove">✕</button></td>';
+
+        tr.innerHTML = html;
+        tbody.appendChild(tr);
+    }
+
+    function onActHoursInput(input) {
+        const val = parseFloat(input.value);
+        if (val > 0) {
+            input.style.background = '#f0f4ff';
+            input.style.borderColor = '#c4ceff';
+            input.style.fontWeight = '600';
+            input.style.color = '#667eea';
+        } else {
+            input.style.background = '';
+            input.style.borderColor = '';
+            input.style.fontWeight = '';
+            input.style.color = '';
+        }
+        updateDailyTotal();
+    }
+
+    function removeEntry(btn) {
+        btn.closest('tr').remove();
+        updateDailyTotal();
+    }
+
+    function updateDailyTotal() {
+        let total = 0;
+        document.querySelectorAll('.act-hours').forEach(inp => {
+            total += parseFloat(inp.value) || 0;
+        });
+        total = Math.round(total * 10) / 10;
+        const badge = document.getElementById('dailyTotalBadge');
+        badge.textContent = 'Total: ' + total + 'h / 8h';
+        badge.className = 'daily-total-badge' + (total >= 8 ? ' ok' : total > 0 ? ' warn' : '');
+    }
+
+    async function saveDay() {
+        const date = document.getElementById('datePicker').value;
+        if (!date) { alert('Please select a date.'); return; }
+
+        const entries = [];
+        document.querySelectorAll('#entriesBody tr').forEach(row => {
+            const ticket = row.querySelector('.entry-ticket').value.trim();
+            const notes  = row.querySelector('.entry-notes').value.trim();
+            const activityHours = {};
+            row.querySelectorAll('.act-hours').forEach(inp => {
+                const hrs = parseFloat(inp.value);
+                if (hrs > 0) activityHours[inp.dataset.activity] = hrs;
+            });
+            const hasHours = Object.keys(activityHours).length > 0;
+            if (ticket || hasHours) {
+                entries.push({ ticket, activityHours, notes });
+            }
+        });
+
+        const data = await getTimesheetData(currentUser);
+        if (entries.length > 0) {
+            data[date] = entries;
+        } else {
+            delete data[date];
+        }
+        await saveTimesheetData(currentUser, data);
+        showSuccess('✅ Saved to GitHub!');
+    }
+
+    // ============================================================
+    // WEEKLY VIEW
+    // ============================================================
+
+    async function loadWeeklyView() {
+        const weekStr = document.getElementById('weekPicker').value;
+        if (!weekStr) return;
+
+        const days = getDaysForWeek(weekStr);
+        const data = await getTimesheetData(currentUser);
+
+        const ticketSet = new Set();
+        let totalWorked = 0;
+
+        days.forEach(day => {
+            (data[day.key] || []).forEach(e => {
+                if (e.ticket) ticketSet.add(e.ticket);
+                Object.values(e.activityHours || {}).forEach(h => totalWorked += parseFloat(h) || 0);
+            });
+        });
+        totalWorked = Math.round(totalWorked * 10) / 10;
+
+        document.getElementById('workedHours').textContent = totalWorked + 'h';
+        const remaining = Math.round((40 - totalWorked) * 10) / 10;
+        const remItem  = document.getElementById('remainingItem');
+        const remLabel = document.getElementById('remainingLabel');
+        const remVal   = document.getElementById('remainingHours');
+
+        if (remaining >= 0) {
+            remLabel.textContent = 'Remaining'; remVal.textContent = remaining + 'h';
+            remItem.className = 'hw-item positive';
+        } else {
+            remLabel.textContent = 'Overtime'; remVal.textContent = Math.abs(remaining) + 'h';
+            remItem.className = 'hw-item negative';
+        }
+
+        const table = document.getElementById('pivotTable');
+
+        if (ticketSet.size === 0) {
+            table.innerHTML = '<tr><td class="empty-pivot" colspan="7">No entries logged this week. Use "My Timesheet" to add time.</td></tr>';
+            return;
+        }
+
+        const tickets = [...ticketSet].sort();
+        const dayTotals = [0,0,0,0,0];
+        let grandTotal = 0;
+
+        let html = '<thead><tr><th>Ticket</th>';
+        days.forEach(d => { html += '<th>' + d.name + '<span class="day-date">' + d.date + '</span></th>'; });
+        html += '<th>Total</th></tr></thead><tbody>';
+
+        tickets.forEach(ticket => {
+            let rowTotal = 0;
+            const url = getHappyFoxTicketUrl(ticket);
+            html += '<tr><td class="ticket-cell"><a href="' + url + '" target="_blank" title="Open in HappyFox">' + escHtml(ticket) + ' 🔗</a></td>';
+            days.forEach((day, idx) => {
+                const dayEntries = (data[day.key] || []).filter(e => e.ticket === ticket);
+                let hrs = 0;
+                const actSet = new Set();
+                dayEntries.forEach(e => {
+                    Object.entries(e.activityHours || {}).forEach(([a, h]) => {
+                        hrs += parseFloat(h) || 0;
+                        actSet.add(a);
+                    });
+                });
+                hrs = Math.round(hrs * 10) / 10;
+                dayTotals[idx] += hrs;
+                rowTotal += hrs;
+                const acts = [...actSet].join(', ');
+                if (hrs > 0) {
+                    html += '<td class="hours-cell has-hours"><span class="cell-hours">' + hrs + 'h</span>' +
+                        (acts ? '<span class="cell-activity">' + escHtml(acts) + '</span>' : '') + '</td>';
+                } else {
+                    html += '<td class="hours-cell"><span style="color:#ddd">—</span></td>';
+                }
+            });
+            grandTotal += rowTotal;
+            html += '<td class="row-total">' + (rowTotal > 0 ? rowTotal + 'h' : '—') + '</td></tr>';
+        });
+
+        html += '</tbody><tfoot><tr><td class="footer-label">Daily Total</td>';
+        dayTotals.forEach(t => {
+            const cls = t >= 8 ? 'ok' : t > 0 ? 'warn' : '';
+            html += '<td class="day-total ' + cls + '">' + (t > 0 ? t + 'h' : '—') + '</td>';
+        });
+        html += '<td class="grand-total">' + grandTotal + 'h</td></tr></tfoot>';
+
+        table.innerHTML = html;
+    }
+
+    // ============================================================
+    // TEAM ANALYTICS
+    // ============================================================
+
+    async function loadAdminDashboard() {
+        const from = document.getElementById('filterFrom').value;
+        const to   = document.getElementById('filterTo').value;
+
+        // Aggregate across all users
+        let totalHrs = 0;
+        const ticketMap = {}; // ticket -> { totalHours, members: { member -> { acts: { act->hrs } } } }
+        const memberMap = {}; // member -> { totalHours, entries, tickets: Set, acts: { act->hrs } }
+        const teamActMap = {}; // activity -> total hours (team-wide)
+
+        for (const member in USERS) {
+            const data = await getTimesheetData(member);
+            let memberTotal = 0;
+            let memberEntries = 0;
+
+            for (const date in data) {
+                if (from && date < from) continue;
+                if (to   && date > to)   continue;
+
+                (data[date] || []).forEach(entry => {
+                    const ticket = entry.ticket || '(no ticket)';
+                    const ah = entry.activityHours || {};
+                    const entryTotal = Object.values(ah).reduce((s,h) => s + (parseFloat(h)||0), 0);
+
+                    if (entryTotal === 0 && !entry.ticket) return;
+
+                    memberEntries++;
+                    memberTotal += entryTotal;
+                    totalHrs   += entryTotal;
+
+                    // Ticket map
+                    if (!ticketMap[ticket]) ticketMap[ticket] = { totalHours: 0, members: {} };
+                    ticketMap[ticket].totalHours += entryTotal;
+                    if (!ticketMap[ticket].members[member]) ticketMap[ticket].members[member] = { acts: {} };
+                    Object.entries(ah).forEach(([a,h]) => {
+                        ticketMap[ticket].members[member].acts[a] = (ticketMap[ticket].members[member].acts[a]||0) + (parseFloat(h)||0);
+                    });
+
+                    // Member map
+                    if (!memberMap[member]) memberMap[member] = { totalHours:0, entries:0, tickets: new Set(), acts:{} };
+                    memberMap[member].totalHours  += entryTotal;
+                    memberMap[member].entries     += 1;
+                    if (entry.ticket) memberMap[member].tickets.add(entry.ticket);
+                    Object.entries(ah).forEach(([a,h]) => {
+                        memberMap[member].acts[a] = (memberMap[member].acts[a]||0) + (parseFloat(h)||0);
+                    });
+
+                    // Team activity map
+                    Object.entries(ah).forEach(([a,h]) => {
+                        teamActMap[a] = (teamActMap[a]||0) + (parseFloat(h)||0);
+                    });
+                });
+            }
+        }
+
+        totalHrs = Math.round(totalHrs * 10) / 10;
+        const memberCount  = Object.keys(memberMap).length;
+        const ticketCount  = Object.keys(ticketMap).filter(t => t !== '(no ticket)').length;
+        const avgHrs       = memberCount > 0 ? Math.round((totalHrs / memberCount) * 10) / 10 : 0;
+
+        document.getElementById('totalHours').textContent  = totalHrs;
+        document.getElementById('teamCount').textContent   = memberCount;
+        document.getElementById('ticketCount').textContent = ticketCount;
+        document.getElementById('avgHours').textContent    = avgHrs;
+
+        // Activity Breakdown
+        const actBreakBody = document.getElementById('activityBreakdownBody');
+        actBreakBody.innerHTML = '';
+        const sortedActs = Object.entries(teamActMap).sort((a,b) => b[1]-a[1]);
+        const maxActHrs  = sortedActs.length > 0 ? sortedActs[0][1] : 1;
+
+        if (sortedActs.length === 0) {
+            actBreakBody.innerHTML = '<tr><td colspan="4" class="no-data">No activity data available.</td></tr>';
+        } else {
+            sortedActs.forEach(([act, hrs], idx) => {
+                const pct = totalHrs > 0 ? Math.round((hrs / totalHrs) * 100) : 0;
+                const barW = Math.round((hrs / maxActHrs) * 100);
+                const color = ACT_COLORS[ACTIVITY_TYPES.indexOf(act) % ACT_COLORS.length] || '#667eea';
+                const tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td><span class="act-pill" style="background:' + color + '22;color:' + color + ';border-color:' + color + '44">' + escHtml(act) + '</span></td>' +
+                    '<td class="num-col"><strong>' + (Math.round(hrs*10)/10) + 'h</strong></td>' +
+                    '<td class="num-col">' + pct + '%</td>' +
+                    '<td class="act-bar-cell"><div class="act-bar-wrap"><div class="act-bar-bg"><div class="act-bar-fill" style="width:' + barW + '%;background:' + color + '"></div></div><span class="act-bar-label" style="color:' + color + '">' + (Math.round(hrs*10)/10) + 'h</span></div></td>';
+                actBreakBody.appendChild(tr);
+            });
+        }
+
+        // Ticket cards
+        const ticketCards = document.getElementById('ticketCards');
+        ticketCards.innerHTML = '';
+        if (Object.keys(ticketMap).length === 0) {
+            ticketCards.innerHTML = '<div class="no-data">No ticket data for the selected period.</div>';
+        } else {
+            Object.entries(ticketMap).sort((a,b) => b[1].totalHours - a[1].totalHours).forEach(([ticket, tdata]) => {
+                const card = document.createElement('div');
+                card.className = 'ticket-card';
+
+                // Build member + activity detail table
+                let bodyHtml = '<table class="summary-table"><thead><tr><th>Member</th>';
+                ACTIVITY_TYPES.forEach(a => {
+                    if (Object.values(tdata.members).some(m => m.acts[a])) {
+                        bodyHtml += '<th class="num-col">' + escHtml(a) + '</th>';
+                    }
+                });
+                bodyHtml += '<th class="num-col">Total</th></tr></thead><tbody>';
+
+                const relevantActs = ACTIVITY_TYPES.filter(a =>
+                    Object.values(tdata.members).some(m => m.acts[a])
+                );
+
+                Object.entries(tdata.members).sort((a,b) => {
+                    const ta = Object.values(a[1].acts).reduce((s,h)=>s+h,0);
+                    const tb = Object.values(b[1].acts).reduce((s,h)=>s+h,0);
+                    return tb - ta;
+                }).forEach(([mem, mdata]) => {
+                    const memTotal = Object.values(mdata.acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
+                    bodyHtml += '<tr><td>' + escHtml(mem) + '</td>';
+                    relevantActs.forEach(a => {
+                        bodyHtml += '<td class="num-col">' + (mdata.acts[a] ? (Math.round(mdata.acts[a]*10)/10)+'h' : '—') + '</td>';
+                    });
+                    bodyHtml += '<td class="num-col"><strong>' + (Math.round(memTotal*10)/10) + 'h</strong></td></tr>';
+                });
+                bodyHtml += '</tbody></table>';
+
+                const url = getHappyFoxTicketUrl(ticket);
+                card.innerHTML =
+                    '<div class="ticket-card-header" onclick="toggleCard(this)">' +
+                    '<div class="ticket-card-header-left">' +
+                    '<span class="ticket-id"><a href="' + url + '" target="_blank">' + escHtml(ticket) + ' 🔗</a></span>' +
+                    '<span class="ticket-total">' + (Math.round(tdata.totalHours*10)/10) + 'h total</span>' +
+                    '</div>' +
+                    '<span class="expand-icon">▼</span>' +
+                    '</div>' +
+                    '<div class="ticket-card-body">' + bodyHtml + '</div>';
+
+                ticketCards.appendChild(card);
+            });
+        }
+
+        // Member summary
+        const mBody = document.getElementById('memberSummary');
+        mBody.innerHTML = '';
+        if (Object.keys(memberMap).length === 0) {
+            mBody.innerHTML = '<tr><td colspan="5" class="no-data">No member data available.</td></tr>';
+        } else {
+            Object.entries(memberMap).sort((a,b) => b[1].totalHours - a[1].totalHours).forEach(([mem, s]) => {
+                const actHtml = Object.entries(s.acts)
+                    .filter(([,h]) => h > 0)
+                    .sort((a,b) => b[1]-a[1])
+                    .map(([a,h]) => {
+                        const color = ACT_COLORS[ACTIVITY_TYPES.indexOf(a) % ACT_COLORS.length] || '#667eea';
+                        return '<span class="member-act-item" style="background:' + color + '18;color:' + color + '">' + escHtml(a) + ': ' + (Math.round(h*10)/10) + 'h</span>';
+                    }).join('');
+
+                const tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td>' + escHtml(mem) + '</td>' +
+                    '<td class="num-col"><strong>' + (Math.round(s.totalHours*10)/10) + 'h</strong></td>' +
+                    '<td class="num-col">' + s.entries + '</td>' +
+                    '<td class="num-col">' + s.tickets.size + '</td>' +
+                    '<td><div class="member-act-grid">' + (actHtml || '<span style="color:#ccc;font-size:12px">—</span>') + '</div></td>';
+                mBody.appendChild(tr);
+            });
+        }
+    }
+
+    function toggleCard(header) {
+        const body = header.nextElementSibling;
+        const icon = header.querySelector('.expand-icon');
+        body.classList.toggle('open');
+        icon.classList.toggle('open');
+    }
+
+    function clearAnalyticsFilter() {
+        document.getElementById('filterFrom').value = '';
+        document.getElementById('filterTo').value = '';
+        loadAdminDashboard();
+    }
+
+    // ============================================================
+    // TAB SWITCHING
+    // ============================================================
+
+    function switchTab(tabId, btn) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        if (btn) btn.classList.add('active');
+        if (tabId === 'weeklyView') loadWeeklyView();
+        if (tabId === 'admin') loadAdminDashboard();
+    }
+
+    // ============================================================
+    // IMPORT / EXPORT
+    // ============================================================
+
+    // USER EXPORT — only exports current user's data (no blanks for others)
+    async function openExportModal() {
+        await saveDay();
+        const data = await getTimesheetData(currentUser);
+        const exportObj = {
+            username: currentUser,
+            exportDate: new Date().toISOString(),
+            data: data
+        };
+        document.getElementById('exportData').value = JSON.stringify(exportObj, null, 2);
+        document.getElementById('exportModal').classList.add('show');
+    }
+
+    // ADMIN EXPORT — exports all users that actually have data
+    async function openAdminExportModal() {
+        const allData = {};
+        for (const m in USERS) {
+            const d = await getTimesheetData(m);
+            if (Object.keys(d).length > 0) allData[m] = d;  // skip blank users
+        }
+        const exportObj = {
+            exportDate: new Date().toISOString(),
+            exportedBy: currentUser,
+            teamData: allData
+        };
+        document.getElementById('adminExportData').value = JSON.stringify(exportObj, null, 2);
+        document.getElementById('adminExportModal').classList.add('show');
+    }
+
+    // USER IMPORT — replaces current user's data with imported file
+    function importTimesheet(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async e => {
+            try {
+                const parsed = JSON.parse(e.target.result);
+                const incoming = migrateData(parsed.data || parsed);
+                // For user self-import, replace (they are importing their own backup)
+                await saveTimesheetData(currentUser, incoming);
+                await loadDayEntries();
+                showSuccess('✅ Timesheet imported successfully!');
+            } catch { alert('Error: Invalid JSON format'); }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    }
+
+    // ADMIN IMPORT — accepts multiple files, APPENDS data (no replacement)
+    function importTeamData(event) {
+        const files = Array.from(event.target.files);
+        if (!files.length) return;
+
+        let processed = 0;
+        const results = [];
+
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = async e => {
+                processed++;
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    let importedMembers = [];
+
+                    if (parsed.teamData) {
+                        // It's a team/analytics export
+                        for (const member in parsed.teamData) {
+                            const existing = await getTimesheetData(member);
+                            const incoming  = migrateData(parsed.teamData[member]);
+                            const merged    = mergeTimesheetData(existing, incoming);
+                            await saveTimesheetData(member, merged);
+                            importedMembers.push(member);
+                        }
+                    } else if (parsed.username && parsed.data) {
+                        // It's a single-user export
+                        const member   = parsed.username;
+                        const existing = await getTimesheetData(member);
+                        const incoming  = migrateData(parsed.data);
+                        const merged    = mergeTimesheetData(existing, incoming);
+                        await saveTimesheetData(member, merged);
+                        importedMembers.push(member);
+                    } else {
+                        // Raw data object — try treating as single-user data for currentUser
+                        const existing = await getTimesheetData(currentUser);
+                        const incoming  = migrateData(parsed);
+                        const merged    = mergeTimesheetData(existing, incoming);
+                        await saveTimesheetData(currentUser, merged);
+                        importedMembers.push(currentUser);
+                    }
+
+                    results.push({ name: file.name, ok: true, members: importedMembers });
+                } catch(err) {
+                    results.push({ name: file.name, ok: false, error: err.message });
+                }
+
+                if (processed === files.length) {
+                    finishTeamImport(results);
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        event.target.value = '';
+    }
+
+    function finishTeamImport(results) {
+        loadAdminDashboard();
+
+        const okCount  = results.filter(r => r.ok).length;
+        const errCount = results.length - okCount;
+
+        document.getElementById('importResultSummary').textContent =
+            'Imported ' + okCount + ' of ' + results.length + ' file(s). Data has been appended to existing records.' +
+            (errCount > 0 ? ' ' + errCount + ' file(s) had errors.' : '');
+
+        const list = document.getElementById('importFileList');
+        list.innerHTML = '';
+        results.forEach(r => {
+            const div = document.createElement('div');
+            div.className = 'import-file-item ' + (r.ok ? 'success' : 'error');
+            div.innerHTML =
+                '<span class="fname">' + escHtml(r.name) + '</span>' +
+                '<span class="fstatus">' + (r.ok ? '✓ ' + r.members.join(', ') : '✗ ' + escHtml(r.error || 'Invalid format')) + '</span>';
+            list.appendChild(div);
+        });
+
+        document.getElementById('importResultModal').classList.add('show');
+    }
+
+    function downloadJSON(type) {
+        const id = type === 'timesheet' ? 'exportData' : 'adminExportData';
+        const filename = type === 'timesheet'
+            ? 'timesheet_' + currentUser + '_' + dateToKey(new Date()) + '.json'
+            : 'analytics_' + dateToKey(new Date()) + '.json';
+        const blob = new Blob([document.getElementById(id).value], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function copyToClipboard(id) {
+        const el = document.getElementById(id);
+        el.select();
+        document.execCommand('copy');
+        showSuccess('Copied to clipboard!');
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('show');
+    }
+
+    // ============================================================
+    // UTILS
+    // ============================================================
+
+    function showSuccess(msg) {
+        const el = document.getElementById('successMessage');
+        el.textContent = msg;
+        el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), 3000);
+    }
+
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;');
+    }
+
+    document.addEventListener('click', e => {
+        ['exportModal','adminExportModal','importResultModal'].forEach(id => {
+            if (e.target === document.getElementById(id)) closeModal(id);
+        });
+    });
+</script>
+</body>
+</html>

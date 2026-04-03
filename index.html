@@ -731,19 +731,19 @@
         }
     }
 
-    // async function getFileFromGitHub(filePath) {
-    //     try {
-    //         const result = await callGitHubProxy('read', filePath);
-    //         if (result.data) {
-    //             return result.data;
-    //         }
-    //         return null;
-    //     } catch (error) {
-    //         console.error(`Error reading ${filePath}:`, error);
-    //         return null;
-    //     }
-    // }
     async function getFileFromGitHub(filePath) {
+        try {
+            const result = await callGitHubProxy('read', filePath);
+            if (result.data) {
+                return result.data;
+            }
+            return null;
+        } catch (error) {
+            console.error(`Error reading ${filePath}:`, error);
+            return null;
+        }
+    }
+    async function getFileFromGitHub1(filePath) {
   try {
     const result = await callGitHubProxy('read', filePath);
     if (result.data) {
@@ -767,25 +767,25 @@
         }
     }
 
-    // async function getAllTimesheetsFromGitHub() {
-    //     const content = await getFileFromGitHub(GITHUB_CONFIG.timesheetsFile);
-    //     if (!content) {
-    //         return {
-    //             lastUpdated: new Date().toISOString(),
-    //             yashwanth: {},
-    //             ved: {},
-    //             harsha: {},
-    //             bhalchandra: {}
-    //         };
-    //     }
-    //     try {
-    //         return JSON.parse(content);
-    //     } catch (e) {
-    //         console.error('Error parsing timesheets:', e);
-    //         return {};
-    //     }
-    // }
     async function getAllTimesheetsFromGitHub() {
+        const content = await getFileFromGitHub(GITHUB_CONFIG.timesheetsFile);
+        if (!content) {
+            return {
+                lastUpdated: new Date().toISOString(),
+                yashwanth: {},
+                ved: {},
+                harsha: {},
+                bhalchandra: {}
+            };
+        }
+        try {
+            return JSON.parse(content);
+        } catch (e) {
+            console.error('Error parsing timesheets:', e);
+            return {};
+        }
+    }
+    async function getAllTimesheetsFromGitHub1() {
   const content = await getFileFromGitHub(GITHUBCONFIG.timesheetsFile);
   if (!content) return { lastUpdated: new Date().toISOString(), yashwanth: {}, ved: {}, harsha: {}, bhalchandra: {} };
   // content is now already a parsed object — no JSON.parse needed

@@ -858,7 +858,8 @@
     }
 
     function getHappyFoxTicketUrl(ticketId) {
-        const strippedId = ticketId.replace(/[A-Za-z-]/g, '');
+        // const strippedId = ticketId.replace(/[A-Za-z-]/g, '');
+        const strippedId = ticketId.replace(/\D/g, '');
         return `https://askdarwin.darwinbox.com/staff/ticket/${strippedId}`;
     }
 

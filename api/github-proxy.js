@@ -3,9 +3,9 @@
 // Handles GitHub API calls server-side to avoid CORS issues
 
 const GITHUB_CONFIG = {
-    owner: process.env.GITHUB_OWNER || 'YOUR_GITHUB_USERNAME',
+    owner: process.env.GITHUB_OWNER || 'yashwanthkrishna51-netizen',
     repo: process.env.GITHUB_REPO || 'timesheet-data',
-    token: process.env.GITHUB_TOKEN || 'YOUR_GITHUB_TOKEN',
+    token: process.env.GITHUB_TOKEN || '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',
     branch: 'main'
 };
 

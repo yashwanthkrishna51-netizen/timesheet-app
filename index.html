@@ -501,12 +501,16 @@
     // CONSTANTS
     // ============================================================
 
-    const USERS = {
-        yashwanth:   { password: 'password123', admin: true },
-        ved:         { password: 'password123', admin: true },
-        harsha:      { password: 'password123', admin: false },
-        bhalchandra: { password: 'password123', admin: false }
-    };
+    // Users are no longer hardcoded here - they're validated via secure API endpoint
+    // See api/auth.js for authentication logic
+
+    // Team members list (safe to expose - just usernames, no passwords)
+    const TEAM_MEMBERS = [
+        'yashwanth',
+        'ved',
+        'harsha',
+        'bhalchandra'
+    ];
 
     const ACTIVITY_TYPES = [
         'BPM + Functional',
@@ -525,25 +529,62 @@
 
     let currentUser = null;
     let currentUserIsAdmin = false;
+    let authToken = null;
 
     // ============================================================
     // AUTH
     // ============================================================
 
-    function handleLogin(event) {
+    async function handleLogin(event) {
         event.preventDefault();
         const username = document.getElementById('username').value.trim().toLowerCase();
         const password = document.getElementById('password').value;
         const errorMsg = document.getElementById('errorMessage');
+        const loginBtn = document.querySelector('.login-btn');
 
-        if (USERS[username] && USERS[username].password === password) {
-            currentUser = username;
-            currentUserIsAdmin = USERS[username].admin;
+        if (!username || !password) {
+            errorMsg.textContent = 'Please enter username and password';
+            errorMsg.style.display = 'block';
+            return;
+        }
+
+        // Disable button while authenticating
+        loginBtn.disabled = true;
+        loginBtn.textContent = '⏳ Signing in...';
+
+        try {
+            const response = await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                errorMsg.textContent = result.error || 'Login failed';
+                errorMsg.style.display = 'block';
+                document.getElementById('password').value = '';
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Sign In';
+                return;
+            }
+
+            // Login successful
+            currentUser = result.username;
+            currentUserIsAdmin = result.isAdmin;
+            authToken = result.token;
             errorMsg.style.display = 'none';
             loginSuccess();
-        } else {
+            loginBtn.disabled = false;
+            loginBtn.textContent = 'Sign In';
+
+        } catch (error) {
+            console.error('Login error:', error);
+            errorMsg.textContent = 'Connection error: ' + error.message;
             errorMsg.style.display = 'block';
-            document.getElementById('password').value = '';
+            loginBtn.disabled = false;
+            loginBtn.textContent = 'Sign In';
         }
     }
 
@@ -647,94 +688,68 @@
     }
 
     // ============================================================
-    // GITHUB API CONFIGURATION
+    // GITHUB API CONFIGURATION (using backend proxy)
     // ============================================================
 
     const GITHUB_CONFIG = {
-        owner: 'yashwanthkrishna51-netizen',        // e.g., yashwanth-darwinbox
-        repo: 'timesheet-data',                // Your private repo name
-        token: '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',            // Your personal access token
-        branch: 'main',
+        // No need to store token here - it's in Vercel environment variables
+        apiProxy: '/api/github-proxy',  // Vercel function endpoint
         timesheetsFile: 'data/timesheets.json',
         ticketsFile: 'tickets/tickets.csv'
     };
 
     // ============================================================
-    // GITHUB API FUNCTIONS
+    // GITHUB API FUNCTIONS (via backend proxy)
     // ============================================================
+
+    async function callGitHubProxy(action, filePath, content = null, message = null) {
+        try {
+            const response = await fetch(GITHUB_CONFIG.apiProxy, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action,
+                    filePath,
+                    content,
+                    message
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                console.error(`Proxy error (${action} ${filePath}):`, error);
+                throw new Error(error.error || `Proxy error: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error(`Failed to ${action} ${filePath}:`, error.message);
+            showSuccess('⚠ Error: ' + error.message, true);
+            throw error;
+        }
+    }
 
     async function getFileFromGitHub(filePath) {
         try {
-            const response = await fetch(
-                `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/${filePath}?ref=${GITHUB_CONFIG.branch}`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${GITHUB_CONFIG.token}`,
-                        'Accept': 'application/vnd.github.v3.raw'
-                    }
-                }
-            );
-
-            if (response.status === 404) {
-                return null;
+            const result = await callGitHubProxy('read', filePath);
+            if (result.data) {
+                return result.data;
             }
-
-            if (!response.ok) {
-                throw new Error(`GitHub API error: ${response.status}`);
-            }
-
-            return await response.text();
+            return null;
         } catch (error) {
-            console.error(`Error fetching ${filePath}:`, error);
+            console.error(`Error reading ${filePath}:`, error);
             return null;
         }
     }
 
     async function saveFileToGitHub(filePath, content, message) {
         try {
-            const currentFile = await fetch(
-                `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/${filePath}?ref=${GITHUB_CONFIG.branch}`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${GITHUB_CONFIG.token}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }
-            );
-
-            let sha = null;
-            if (currentFile.ok) {
-                const data = await currentFile.json();
-                sha = data.sha;
-            }
-
-            const updateResponse = await fetch(
-                `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/${filePath}`,
-                {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${GITHUB_CONFIG.token}`,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/vnd.github.v3+json'
-                    },
-                    body: JSON.stringify({
-                        message: message || `Update ${filePath}`,
-                        content: btoa(content),
-                        branch: GITHUB_CONFIG.branch,
-                        ...(sha && { sha })
-                    })
-                }
-            );
-
-            if (!updateResponse.ok) {
-                const error = await updateResponse.json();
-                throw new Error(error.message || 'Failed to save to GitHub');
-            }
-
-            return true;
+            const result = await callGitHubProxy('write', filePath, content, message);
+            return result.success;
         } catch (error) {
-            console.error('Error saving to GitHub:', error);
-            showSuccess('⚠ Error saving to GitHub: ' + error.message, true);
+            console.error(`Error saving ${filePath}:`, error);
             return false;
         }
     }
@@ -1125,7 +1140,7 @@
         const memberMap = {}; // member -> { totalHours, entries, tickets: Set, acts: { act->hrs } }
         const teamActMap = {}; // activity -> total hours (team-wide)
 
-        for (const member in USERS) {
+        for (const member of TEAM_MEMBERS) {
             const data = await getTimesheetData(member);
             let memberTotal = 0;
             let memberEntries = 0;
@@ -1328,7 +1343,7 @@
     // ADMIN EXPORT — exports all users that actually have data
     async function openAdminExportModal() {
         const allData = {};
-        for (const m in USERS) {
+        for (const m of TEAM_MEMBERS) {
             const d = await getTimesheetData(m);
             if (Object.keys(d).length > 0) allData[m] = d;  // skip blank users
         }

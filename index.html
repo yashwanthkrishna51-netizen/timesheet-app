@@ -198,7 +198,7 @@
         .pivot-table td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; text-align: center; font-size: 13px; }
         .pivot-table td:first-child { text-align: left; }
         .pivot-table tbody tr:hover td { background: #f8f9fa; }
-        .ticket-cell { font-weight: 700; color: #333; font-size: 13px; }
+        /* .ticket-cell { font-weight: 700; color: #333; font-size: 13px; } */
         .hours-cell.has-hours { background: #f0f4ff; }
         .cell-hours { display: block; font-weight: 700; color: #667eea; font-size: 14px; }
         .cell-activity { display: block; font-size: 10px; color: #999; margin-top: 2px; line-height: 1.4; }
@@ -234,9 +234,43 @@
             transition: background 0.15s;
         }
         .ticket-card-header:hover { background: #fafafa; }
-        .ticket-card-header-left { display: flex; align-items: center; gap: 12px; }
-        .ticket-id { font-weight: 700; color: #333; font-size: 14px; }
-        .ticket-total { font-size: 13px; color: #667eea; font-weight: 600; }
+        /* .ticket-card-header-left { display: flex; align-items: center; gap: 12px; } */
+        /* .ticket-id { font-weight: 700; color: #333; font-size: 14px; } */
+        /* .ticket-total { font-size: 13px; color: #667eea; font-weight: 600; } */
+        .ticket-cell { font-weight: 700; color: #333; font-size: 13px; }
+.ticket-cell a,
+.ticket-id a { color: inherit; text-decoration: none; }
+.ticket-cell a:hover,
+.ticket-id a:hover { text-decoration: underline; }
+
+.ticket-subject {
+    display: block;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #777;
+    font-weight: 400;
+    margin-top: 3px;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.ticket-card-header-left {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
+.ticket-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.ticket-id { font-weight: 700; color: #333; font-size: 14px; }
+.ticket-total { font-size: 13px; color: #667eea; font-weight: 600; white-space: nowrap; }
+        
         .expand-icon { color: #aaa; font-size: 12px; transition: transform 0.2s; }
         .expand-icon.open { transform: rotate(180deg); }
         .ticket-card-body { display: none; border-top: 1px solid #f0f0f0; }
@@ -906,7 +940,9 @@
     }
 
     let allTickets = [];
-
+    function getTicketMeta(ticketId) {
+    return allTickets.find(t => t.id === ticketId) || null;
+}
     function migrateData(data) {
         const out = {};
         for (const date in data) {
@@ -1133,7 +1169,14 @@
         tickets.forEach(ticket => {
             let rowTotal = 0;
             const url = getHappyFoxTicketUrl(ticket);
-            html += '<tr><td class="ticket-cell"><a href="' + url + '" target="_blank" title="Open in HappyFox">' + escHtml(ticket) + ' 🔗</a></td>';
+            // const url = getHappyFoxTicketUrl(ticket);
+    const ticketMeta = getTicketMeta(ticket);
+    const ticketSubject = ticketMeta?.subject || '';
+            // html += '<tr><td class="ticket-cell"><a href="' + url + '" target="_blank" title="Open in HappyFox">' + escHtml(ticket) + ' 🔗</a></td>';
+            html += '<tr><td class="ticket-cell">' +
+        '<a href="' + url + '" target="_blank" title="Open in HappyFox">' + escHtml(ticket) + ' 🔗</a>' +
+        (ticketSubject ? '<div class="ticket-subject">' + escHtml(ticketSubject) + '</div>' : '') +
+        '</td>';
             days.forEach((day, idx) => {
                 const dayEntries = (data[day.key] || []).filter(e => e.ticket === ticket);
                 let hrs = 0;
@@ -1299,15 +1342,30 @@
                 bodyHtml += '</tbody></table>';
 
                 const url = getHappyFoxTicketUrl(ticket);
-                card.innerHTML =
-                    '<div class="ticket-card-header" onclick="toggleCard(this)">' +
-                    '<div class="ticket-card-header-left">' +
-                    '<span class="ticket-id"><a href="' + url + '" target="_blank">' + escHtml(ticket) + ' 🔗</a></span>' +
-                    '<span class="ticket-total">' + (Math.round(tdata.totalHours*10)/10) + 'h total</span>' +
-                    '</div>' +
-                    '<span class="expand-icon">▼</span>' +
-                    '</div>' +
-                    '<div class="ticket-card-body">' + bodyHtml + '</div>';
+                // card.innerHTML =
+                //     '<div class="ticket-card-header" onclick="toggleCard(this)">' +
+                //     '<div class="ticket-card-header-left">' +
+                //     '<span class="ticket-id"><a href="' + url + '" target="_blank">' + escHtml(ticket) + ' 🔗</a></span>' +
+                //     '<span class="ticket-total">' + (Math.round(tdata.totalHours*10)/10) + 'h total</span>' +
+                //     '</div>' +
+                //     '<span class="expand-icon">▼</span>' +
+                //     '</div>' +
+                //     '<div class="ticket-card-body">' + bodyHtml + '</div>';
+                const ticketMeta = getTicketMeta(ticket);
+const ticketSubject = ticketMeta?.subject || '';
+
+card.innerHTML =
+    '<div class="ticket-card-header" onclick="toggleCard(this)">' +
+    '<div class="ticket-card-header-left">' +
+    '<div class="ticket-main">' +
+    '<span class="ticket-id"><a href="' + url + '" target="_blank">' + escHtml(ticket) + ' 🔗</a></span>' +
+    (ticketSubject ? '<div class="ticket-subject">' + escHtml(ticketSubject) + '</div>' : '') +
+    '</div>' +
+    '<span class="ticket-total">' + (Math.round(tdata.totalHours*10)/10) + 'h total</span>' +
+    '</div>' +
+    '<span class="expand-icon">▼</span>' +
+    '</div>' +
+    '<div class="ticket-card-body">' + bodyHtml + '</div>';
 
                 ticketCards.appendChild(card);
             });

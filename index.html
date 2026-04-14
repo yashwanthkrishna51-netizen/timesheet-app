@@ -1463,20 +1463,7 @@ card.innerHTML =
             bodyRows.forEach((tr, i) => {
                 const tds = tr.querySelectorAll('td');
                 const member = tds[0] ? tds[0].textContent.trim() : '';
-    //             const actHours = ACTIVITY_TYPES.map((_, ai) => {
-    //                 const cell = tds[ai + 1];
-    //                 return cell ? cell.textContent.trim().replace('h', '') : '';
-    //             });
-    //             const memberTotal = tds[tds.length - 1] ? tds[tds.length - 1].textContent.trim().replace('h', '') : '';
-    //             ticketRows.push([
-    //                 i === 0 ? ticketId : '',
-    //                 i === 0 ? subject : '',
-    //                 i === 0 ? url : '',
-    //                 i === 0 ? total : '',
-    //                 member,
-    //                 ...actHours
-    //             ]);
-    //         });
+   
     //     }
     // });
       // Read the actual rendered activity columns from thead
@@ -1502,7 +1489,9 @@ card.innerHTML =
         member,
         ...actHours
     ]);
-});          
+});     
+                 }
+    });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ticketRows), 'Ticket Details');
 
     // ── Sheet 4: Member Summary ───────────────────────────────

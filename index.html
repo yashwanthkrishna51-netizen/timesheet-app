@@ -15,6 +15,52 @@
             padding: 20px;
         }
 
+        /* ===== LOADING OVERLAY ===== */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.95);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(2px);
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .loading-spinner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f0f0f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
         /* ===== LOGIN ===== */
         .login-screen {
             display: flex; align-items: center; justify-content: center;
@@ -199,7 +245,6 @@
         .pivot-table td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; text-align: center; font-size: 13px; }
         .pivot-table td:first-child { text-align: left; }
         .pivot-table tbody tr:hover td { background: #f8f9fa; }
-        /* .ticket-cell { font-weight: 700; color: #333; font-size: 13px; } */
         .hours-cell.has-hours { background: #f0f4ff; }
         .cell-hours { display: block; font-weight: 700; color: #667eea; font-size: 14px; }
         .cell-activity { display: block; font-size: 10px; color: #999; margin-top: 2px; line-height: 1.4; }
@@ -218,6 +263,8 @@
         .filter-row label { font-size: 13px; font-weight: 600; color: #444; }
         .filter-row input[type="date"] { padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
         .filter-row input[type="date"]:focus { outline: none; border-color: #667eea; }
+        .filter-row select { padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+        .filter-row select:focus { outline: none; border-color: #667eea; }
 
         .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 24px; }
         .metric-card { background: #f8f9fa; border-radius: 10px; padding: 18px 16px; border: 1px solid #e8e8e8; }
@@ -235,42 +282,39 @@
             transition: background 0.15s;
         }
         .ticket-card-header:hover { background: #fafafa; }
-        /* .ticket-card-header-left { display: flex; align-items: center; gap: 12px; } */
-        /* .ticket-id { font-weight: 700; color: #333; font-size: 14px; } */
-        /* .ticket-total { font-size: 13px; color: #667eea; font-weight: 600; } */
         .ticket-cell { font-weight: 700; color: #333; font-size: 13px; }
-.ticket-cell a,
-.ticket-id a { color: inherit; text-decoration: none; }
-.ticket-cell a:hover,
-.ticket-id a:hover { text-decoration: underline; }
+        .ticket-cell a,
+        .ticket-id a { color: inherit; text-decoration: none; }
+        .ticket-cell a:hover,
+        .ticket-id a:hover { text-decoration: underline; }
 
-.ticket-subject {
-    display: block;
-    font-size: 11px;
-    line-height: 1.35;
-    color: #777;
-    font-weight: 400;
-    margin-top: 3px;
-    white-space: normal;
-    word-break: break-word;
-}
+        .ticket-subject {
+            display: block;
+            font-size: 11px;
+            line-height: 1.35;
+            color: #777;
+            font-weight: 400;
+            margin-top: 3px;
+            white-space: normal;
+            word-break: break-word;
+        }
 
-.ticket-card-header-left {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    width: 100%;
-}
+        .ticket-card-header-left {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            width: 100%;
+        }
 
-.ticket-main {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
+        .ticket-main {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
 
-.ticket-id { font-weight: 700; color: #333; font-size: 14px; }
-.ticket-total { font-size: 13px; color: #667eea; font-weight: 600; white-space: nowrap; }
+        .ticket-id { font-weight: 700; color: #333; font-size: 14px; }
+        .ticket-total { font-size: 13px; color: #667eea; font-weight: 600; white-space: nowrap; }
         
         .expand-icon { color: #aaa; font-size: 12px; transition: transform 0.2s; }
         .expand-icon.open { transform: rotate(180deg); }
@@ -302,6 +346,65 @@
         .act-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg,#667eea,#764ba2); transition: width 0.4s; }
         .act-bar-label { font-size: 12px; font-weight: 600; color: #667eea; min-width: 40px; text-align: right; }
 
+        /* ===== MEMBER WEEKLY VIEW SECTION ===== */
+        .member-weekly-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 24px;
+            border: 1px solid #e8e8e8;
+        }
+
+        .member-weekly-controls {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .member-weekly-controls label {
+            font-weight: 600;
+            color: #444;
+            font-size: 14px;
+        }
+
+        .member-weekly-controls select,
+        .member-weekly-controls input[type="week"] {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .member-weekly-controls select:focus,
+        .member-weekly-controls input[type="week"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .member-hours-widget {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            background: white;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .member-hours-widget .hw-item {
+            padding: 12px 20px;
+            text-align: center;
+        }
+
+        .member-hours-widget .hw-item + .hw-item {
+            border-left: 1px solid #f0f0f0;
+        }
+
         /* ===== MODAL ===== */
         .modal {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -328,10 +431,19 @@
             .content { padding: 14px; }
             .analytics-top { flex-direction: column; }
             .hours-widget { flex-wrap: wrap; }
+            .member-hours-widget { flex-wrap: wrap; }
         }
     </style>
 </head>
 <body>
+
+<!-- LOADING OVERLAY -->
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading...</div>
+    </div>
+</div>
 
 <!-- LOGIN -->
 <div id="loginScreen" class="login-screen">
@@ -450,6 +562,39 @@
                 <div class="metric-card"><h3>Avg Hours / Member</h3><div class="value" id="avgHours">0</div></div>
             </div>
 
+            <!-- Member Weekly View Section -->
+            <div class="member-weekly-section">
+                <div class="section-title">📊 View Member Weekly Timesheet</div>
+                <div class="member-weekly-controls">
+                    <label for="memberSelect">Member:</label>
+                    <select id="memberSelect" onchange="updateMemberWeeklyView()">
+                        <option value="">— Select member —</option>
+                    </select>
+                    <label for="memberWeekPicker">Week:</label>
+                    <input type="week" id="memberWeekPicker" onchange="updateMemberWeeklyView()">
+                    <button class="btn btn-secondary btn-small" onclick="updateMemberWeeklyView()">Load</button>
+                </div>
+                <div class="member-hours-widget" id="memberHoursWidget">
+                    <div class="hw-item available">
+                        <div class="hw-label">Available</div>
+                        <div class="hw-value">40h</div>
+                    </div>
+                    <div class="hw-item worked">
+                        <div class="hw-label">Worked</div>
+                        <div class="hw-value" id="memberWorkedHours">0h</div>
+                    </div>
+                    <div class="hw-item" id="memberRemainingItem">
+                        <div class="hw-label" id="memberRemainingLabel">Remaining</div>
+                        <div class="hw-value" id="memberRemainingHours">40h</div>
+                    </div>
+                </div>
+                <div class="weekly-table-wrapper">
+                    <table class="pivot-table" id="memberPivotTable">
+                        <tr><td class="empty-pivot" colspan="7">Select member + week above</td></tr>
+                    </table>
+                </div>
+            </div>
+
             <div class="section-title">Activity Breakdown (Team-wide)</div>
             <table class="summary-table" id="activityBreakdownTable">
                 <thead><tr>
@@ -534,43 +679,46 @@
 
 <script>
     // ============================================================
+    // LOADING OVERLAY UTILS
+    // ============================================================
+
+    function showLoading(text = 'Loading...') {
+        document.querySelector('.loading-text').textContent = text;
+        document.getElementById('loadingOverlay').classList.add('show');
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingOverlay').classList.remove('show');
+    }
+
+    // ============================================================
     // CONSTANTS
     // ============================================================
 
-    // Users are no longer hardcoded here - they're validated via secure API endpoint
-    // See api/auth.js for authentication logic
-
-    // Team members list (safe to expose - just usernames, no passwords)
-    // const TEAM_MEMBERS = [
-    //     'yashwanth.k',
-    //     'ved.s',
-    //     'harsha.t',
-    //     'bhalchandra'
-    // ];
     const TEAM_MEMBERS = [
-    'yashwanth.k',
-    'ved.s',
-    'harsha.t',
-    'bhalchandra',
-    'afaan.f',
-    'amitansh.m',
-    'asnia.h',
-    'abhinav.b',
-    'eeshika.g',
-    'ishan.d',
-    'anurag.s',
-    'hamza.m',
-    'mounika.m',
-    'navya.m',
-    'priyanka.k',
-    'manish.r',
-    'sahithi.v',
-    'sandeep.b',
-    'santhosh.g',
-    'bushra.s',
-    'saiteja.s',
+        'yashwanth.k',
+        'ved.s',
+        'harsha.t',
+        'bhalchandra',
+        'afaan.f',
+        'amitansh.m',
+        'asnia.h',
+        'abhinav.b',
+        'eeshika.g',
+        'ishan.d',
+        'anurag.s',
+        'hamza.m',
+        'mounika.m',
+        'navya.m',
+        'priyanka.k',
+        'manish.r',
+        'sahithi.v',
+        'sandeep.b',
+        'santhosh.g',
+        'bushra.s',
+        'saiteja.s',
         'keya.c'
-];
+    ];
 
     const ACTIVITY_TYPES = [
         'BPM + Functional',
@@ -582,7 +730,6 @@
         'Governance'
     ];
 
-    // Palette for activity pills in analytics
     const ACT_COLORS = [
         '#667eea','#764ba2','#27ae60','#e67e22','#e74c3c','#16a085','#2980b9'
     ];
@@ -608,9 +755,9 @@
             return;
         }
 
-        // Disable button while authenticating
         loginBtn.disabled = true;
         loginBtn.textContent = '⏳ Signing in...';
+        showLoading('Authenticating...');
 
         try {
             const response = await fetch('/api/auth', {
@@ -627,17 +774,18 @@
                 document.getElementById('password').value = '';
                 loginBtn.disabled = false;
                 loginBtn.textContent = 'Sign In';
+                hideLoading();
                 return;
             }
 
-            // Login successful
             currentUser = result.username;
             currentUserIsAdmin = result.isAdmin;
             authToken = result.token;
             errorMsg.style.display = 'none';
-            loginSuccess();
+            await loginSuccess();
             loginBtn.disabled = false;
             loginBtn.textContent = 'Sign In';
+            hideLoading();
 
         } catch (error) {
             console.error('Login error:', error);
@@ -645,6 +793,7 @@
             errorMsg.style.display = 'block';
             loginBtn.disabled = false;
             loginBtn.textContent = 'Sign In';
+            hideLoading();
         }
     }
 
@@ -655,9 +804,10 @@
         document.getElementById('adminBadge').style.display = currentUserIsAdmin ? 'inline-block' : 'none';
         document.getElementById('adminTabBtn').classList.toggle('hidden', !currentUserIsAdmin);
 
-        // Load tickets from CSV
+        showLoading('Loading tickets...');
         allTickets = await loadTicketsFromCSV();
         populateTicketDatalist();
+        populateMemberSelect();
 
         buildEntryTableHeader();
 
@@ -668,6 +818,9 @@
         const monday = getMondayOfWeek(today);
         const isoWeek = getISOWeekStr(monday);
         document.getElementById('weekPicker').value = isoWeek;
+        document.getElementById('memberWeekPicker').value = isoWeek;
+
+        hideLoading();
     }
 
     function populateTicketDatalist() {
@@ -678,6 +831,17 @@
             option.value = ticket.id;
             option.textContent = ticket.displayText;
             datalist.appendChild(option);
+        });
+    }
+
+    function populateMemberSelect() {
+        const sel = document.getElementById('memberSelect');
+        sel.innerHTML = '<option value="">— Select member —</option>';
+        TEAM_MEMBERS.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            sel.appendChild(opt);
         });
     }
 
@@ -719,7 +883,6 @@
     }
 
     function getISOWeekStr(monday) {
-        // returns "YYYY-Www"
         const jan4 = new Date(monday.getFullYear(), 0, 4);
         const dayOfJan4 = jan4.getDay() || 7;
         const mondayWk1 = new Date(jan4);
@@ -748,18 +911,17 @@
     }
 
     // ============================================================
-    // GITHUB API CONFIGURATION (using backend proxy)
+    // GITHUB API CONFIG
     // ============================================================
 
     const GITHUB_CONFIG = {
-        // No need to store token here - it's in Vercel environment variables
-        apiProxy: '/api/github-proxy',  // Vercel function endpoint
+        apiProxy: '/api/github-proxy',
         timesheetsFile: 'data/timesheets.json',
         ticketsFile: 'tickets/tickets.csv'
     };
 
     // ============================================================
-    // GITHUB API FUNCTIONS (via backend proxy)
+    // GITHUB API FUNCTIONS
     // ============================================================
 
     async function callGitHubProxy(action, filePath, content = null, message = null) {
@@ -803,20 +965,7 @@
             return null;
         }
     }
-    async function getFileFromGitHub1(filePath) {
-  try {
-    const result = await callGitHubProxy('read', filePath);
-    if (result.data) {
-      // If data is a double-encoded string, parse it
-      const parsed = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
-      return parsed;
-    }
-    return null;
-  } catch (error) {
-    console.error('Error reading', filePath, error);
-    return null;
-  }
-}
+
     async function saveFileToGitHub(filePath, content, message) {
         try {
             const result = await callGitHubProxy('write', filePath, content, message);
@@ -845,12 +994,6 @@
             return {};
         }
     }
-    async function getAllTimesheetsFromGitHub1() {
-  const content = await getFileFromGitHub(GITHUBCONFIG.timesheetsFile);
-  if (!content) return { lastUpdated: new Date().toISOString(), yashwanth: {}, ved: {}, harsha: {}, bhalchandra: {} };
-  // content is now already a parsed object — no JSON.parse needed
-  return content;
-}
 
     // ============================================================
     // DATA ACCESS
@@ -876,7 +1019,6 @@
         );
     }
 
-    // Ticket CSV functions
     async function loadTicketsFromCSV() {
         const csvContent = await getFileFromGitHub(GITHUB_CONFIG.ticketsFile);
         if (!csvContent) return [];
@@ -937,24 +1079,23 @@
     }
 
     function getHappyFoxTicketUrl(ticketId) {
-        // const strippedId = ticketId.replace(/[A-Za-z-]/g, '');
         const strippedId = ticketId.replace(/\D/g, '');
         return `https://askdarwin.darwinbox.com/staff/ticket/${strippedId}`;
     }
 
     let allTickets = [];
+
     function getTicketMeta(ticketId) {
-    return allTickets.find(t => t.id === ticketId) || null;
-}
+        return allTickets.find(t => t.id === ticketId) || null;
+    }
+
     function migrateData(data) {
         const out = {};
         for (const date in data) {
             const val = data[date];
             if (Array.isArray(val)) {
-                // Migrate old entries that stored activity as string to new activityHours map
                 out[date] = val.map(e => {
-                    if (e.activityHours) return e; // already new format
-                    // Old format: { ticket, activity, hours, notes }
+                    if (e.activityHours) return e;
                     const ah = {};
                     if (e.activity && e.hours) ah[e.activity] = parseFloat(e.hours) || 0;
                     return { ticket: e.ticket||'', activityHours: ah, notes: e.notes||'' };
@@ -970,13 +1111,11 @@
         return out;
     }
 
-    // Deep merge: append dates from source into dest (existing dates: merge entries; new dates: add)
     function mergeTimesheetData(dest, source) {
         for (const date in source) {
             if (!dest[date]) {
                 dest[date] = source[date];
             } else {
-                // Append entries that don't already exist (match by ticket + same activityHours)
                 const existing = dest[date];
                 source[date].forEach(srcEntry => {
                     const dup = existing.find(e =>
@@ -991,7 +1130,7 @@
     }
 
     // ============================================================
-    // MY TIMESHEET — ENTRY TABLE HEADER (ACTIVITY COLUMNS)
+    // MY TIMESHEET — ENTRY TABLE HEADER
     // ============================================================
 
     function buildEntryTableHeader() {
@@ -1012,8 +1151,12 @@
     // ============================================================
 
     async function loadDayEntries() {
+        showLoading('Loading entries...');
         const date = document.getElementById('datePicker').value;
-        if (!date) return;
+        if (!date) {
+            hideLoading();
+            return;
+        }
 
         const data = await getTimesheetData(currentUser);
         const entries = data[date] || [];
@@ -1026,6 +1169,7 @@
             entries.forEach(e => renderEntryRow(e));
         }
         updateDailyTotal();
+        hideLoading();
     }
 
     function addEntry() {
@@ -1093,6 +1237,8 @@
         const date = document.getElementById('datePicker').value;
         if (!date) { alert('Please select a date.'); return; }
 
+        showLoading('Saving...');
+
         const entries = [];
         document.querySelectorAll('#entriesBody tr').forEach(row => {
             const ticket = row.querySelector('.entry-ticket').value.trim();
@@ -1116,6 +1262,7 @@
         }
         await saveTimesheetData(currentUser, data);
         showSuccess('✅ Saved timesheets Successfully!');
+        hideLoading();
     }
 
     // ============================================================
@@ -1123,8 +1270,12 @@
     // ============================================================
 
     async function loadWeeklyView() {
+        showLoading('Loading weekly view...');
         const weekStr = document.getElementById('weekPicker').value;
-        if (!weekStr) return;
+        if (!weekStr) {
+            hideLoading();
+            return;
+        }
 
         const days = getDaysForWeek(weekStr);
         const data = await getTimesheetData(currentUser);
@@ -1158,6 +1309,7 @@
 
         if (ticketSet.size === 0) {
             table.innerHTML = '<tr><td class="empty-pivot" colspan="7">No entries logged this week. Use "My Timesheet" to add time.</td></tr>';
+            hideLoading();
             return;
         }
 
@@ -1172,14 +1324,12 @@
         tickets.forEach(ticket => {
             let rowTotal = 0;
             const url = getHappyFoxTicketUrl(ticket);
-            // const url = getHappyFoxTicketUrl(ticket);
-    const ticketMeta = getTicketMeta(ticket);
-    const ticketSubject = ticketMeta?.subject || '';
-            // html += '<tr><td class="ticket-cell"><a href="' + url + '" target="_blank" title="Open in HappyFox">' + escHtml(ticket) + ' 🔗</a></td>';
+            const ticketMeta = getTicketMeta(ticket);
+            const ticketSubject = ticketMeta?.subject || '';
             html += '<tr><td class="ticket-cell">' +
-        '<a href="' + url + '" target="_blank" title="Open in HappyFox">' + escHtml(ticket) + ' 🔗</a>' +
-        (ticketSubject ? '<div class="ticket-subject">' + escHtml(ticketSubject) + '</div>' : '') +
-        '</td>';
+                '<a href="' + url + '" target="_blank" title="Open in HappyFox">' + escHtml(ticket) + ' 🔗</a>' +
+                (ticketSubject ? '<div class="ticket-subject">' + escHtml(ticketSubject) + '</div>' : '') +
+                '</td>';
             days.forEach((day, idx) => {
                 const dayEntries = (data[day.key] || []).filter(e => e.ticket === ticket);
                 let hrs = 0;
@@ -1213,6 +1363,111 @@
         html += '<td class="grand-total">' + grandTotal + 'h</td></tr></tfoot>';
 
         table.innerHTML = html;
+        hideLoading();
+    }
+
+    // ============================================================
+    // ADMIN: MEMBER WEEKLY VIEW
+    // ============================================================
+
+    async function updateMemberWeeklyView() {
+        const member = document.getElementById('memberSelect').value;
+        const weekStr = document.getElementById('memberWeekPicker').value;
+
+        if (!member || !weekStr) {
+            document.getElementById('memberPivotTable').innerHTML = '<tr><td class="empty-pivot" colspan="7">Select member + week above</td></tr>';
+            return;
+        }
+
+        showLoading(`Loading ${member}'s weekly view...`);
+
+        const days = getDaysForWeek(weekStr);
+        const data = await getTimesheetData(member);
+
+        const ticketSet = new Set();
+        let totalWorked = 0;
+
+        days.forEach(day => {
+            (data[day.key] || []).forEach(e => {
+                if (e.ticket) ticketSet.add(e.ticket);
+                Object.values(e.activityHours || {}).forEach(h => totalWorked += parseFloat(h) || 0);
+            });
+        });
+        totalWorked = Math.round(totalWorked * 10) / 10;
+
+        document.getElementById('memberWorkedHours').textContent = totalWorked + 'h';
+        const remaining = Math.round((40 - totalWorked) * 10) / 10;
+        const remItem  = document.getElementById('memberRemainingItem');
+        const remLabel = document.getElementById('memberRemainingLabel');
+        const remVal   = document.getElementById('memberRemainingHours');
+
+        if (remaining >= 0) {
+            remLabel.textContent = 'Remaining'; remVal.textContent = remaining + 'h';
+            remItem.className = 'hw-item positive';
+        } else {
+            remLabel.textContent = 'Overtime'; remVal.textContent = Math.abs(remaining) + 'h';
+            remItem.className = 'hw-item negative';
+        }
+
+        const table = document.getElementById('memberPivotTable');
+
+        if (ticketSet.size === 0) {
+            table.innerHTML = '<tr><td class="empty-pivot" colspan="7">No entries logged this week for ' + escHtml(member) + '.</td></tr>';
+            hideLoading();
+            return;
+        }
+
+        const tickets = [...ticketSet].sort();
+        const dayTotals = [0,0,0,0,0];
+        let grandTotal = 0;
+
+        let html = '<thead><tr><th>Ticket</th>';
+        days.forEach(d => { html += '<th>' + d.name + '<span class="day-date">' + d.date + '</span></th>'; });
+        html += '<th>Total</th></tr></thead><tbody>';
+
+        tickets.forEach(ticket => {
+            let rowTotal = 0;
+            const url = getHappyFoxTicketUrl(ticket);
+            const ticketMeta = getTicketMeta(ticket);
+            const ticketSubject = ticketMeta?.subject || '';
+            html += '<tr><td class="ticket-cell">' +
+                '<a href="' + url + '" target="_blank" title="Open in HappyFox">' + escHtml(ticket) + ' 🔗</a>' +
+                (ticketSubject ? '<div class="ticket-subject">' + escHtml(ticketSubject) + '</div>' : '') +
+                '</td>';
+            days.forEach((day, idx) => {
+                const dayEntries = (data[day.key] || []).filter(e => e.ticket === ticket);
+                let hrs = 0;
+                const actSet = new Set();
+                dayEntries.forEach(e => {
+                    Object.entries(e.activityHours || {}).forEach(([a, h]) => {
+                        hrs += parseFloat(h) || 0;
+                        actSet.add(a);
+                    });
+                });
+                hrs = Math.round(hrs * 10) / 10;
+                dayTotals[idx] += hrs;
+                rowTotal += hrs;
+                const acts = [...actSet].join(', ');
+                if (hrs > 0) {
+                    html += '<td class="hours-cell has-hours"><span class="cell-hours">' + hrs + 'h</span>' +
+                        (acts ? '<span class="cell-activity">' + escHtml(acts) + '</span>' : '') + '</td>';
+                } else {
+                    html += '<td class="hours-cell"><span style="color:#ddd">—</span></td>';
+                }
+            });
+            grandTotal += rowTotal;
+            html += '<td class="row-total">' + (rowTotal > 0 ? rowTotal + 'h' : '—') + '</td></tr>';
+        });
+
+        html += '</tbody><tfoot><tr><td class="footer-label">Daily Total</td>';
+        dayTotals.forEach(t => {
+            const cls = t >= 8 ? 'ok' : t > 0 ? 'warn' : '';
+            html += '<td class="day-total ' + cls + '">' + (t > 0 ? t + 'h' : '—') + '</td>';
+        });
+        html += '<td class="grand-total">' + grandTotal + 'h</td></tr></tfoot>';
+
+        table.innerHTML = html;
+        hideLoading();
     }
 
     // ============================================================
@@ -1220,14 +1475,14 @@
     // ============================================================
 
     async function loadAdminDashboard() {
+        showLoading('Loading admin dashboard...');
         const from = document.getElementById('filterFrom').value;
         const to   = document.getElementById('filterTo').value;
 
-        // Aggregate across all users
         let totalHrs = 0;
-        const ticketMap = {}; // ticket -> { totalHours, members: { member -> { acts: { act->hrs } } } }
-        const memberMap = {}; // member -> { totalHours, entries, tickets: Set, acts: { act->hrs } }
-        const teamActMap = {}; // activity -> total hours (team-wide)
+        const ticketMap = {};
+        const memberMap = {};
+        const teamActMap = {};
 
         for (const member of TEAM_MEMBERS) {
             const data = await getTimesheetData(member);
@@ -1249,7 +1504,6 @@
                     memberTotal += entryTotal;
                     totalHrs   += entryTotal;
 
-                    // Ticket map
                     if (!ticketMap[ticket]) ticketMap[ticket] = { totalHours: 0, members: {} };
                     ticketMap[ticket].totalHours += entryTotal;
                     if (!ticketMap[ticket].members[member]) ticketMap[ticket].members[member] = { acts: {} };
@@ -1257,7 +1511,6 @@
                         ticketMap[ticket].members[member].acts[a] = (ticketMap[ticket].members[member].acts[a]||0) + (parseFloat(h)||0);
                     });
 
-                    // Member map
                     if (!memberMap[member]) memberMap[member] = { totalHours:0, entries:0, tickets: new Set(), acts:{} };
                     memberMap[member].totalHours  += entryTotal;
                     memberMap[member].entries     += 1;
@@ -1266,7 +1519,6 @@
                         memberMap[member].acts[a] = (memberMap[member].acts[a]||0) + (parseFloat(h)||0);
                     });
 
-                    // Team activity map
                     Object.entries(ah).forEach(([a,h]) => {
                         teamActMap[a] = (teamActMap[a]||0) + (parseFloat(h)||0);
                     });
@@ -1317,7 +1569,6 @@
                 const card = document.createElement('div');
                 card.className = 'ticket-card';
 
-                // Build member + activity detail table
                 let bodyHtml = '<table class="summary-table"><thead><tr><th>Member</th>';
                 ACTIVITY_TYPES.forEach(a => {
                     if (Object.values(tdata.members).some(m => m.acts[a])) {
@@ -1345,30 +1596,21 @@
                 bodyHtml += '</tbody></table>';
 
                 const url = getHappyFoxTicketUrl(ticket);
-                // card.innerHTML =
-                //     '<div class="ticket-card-header" onclick="toggleCard(this)">' +
-                //     '<div class="ticket-card-header-left">' +
-                //     '<span class="ticket-id"><a href="' + url + '" target="_blank">' + escHtml(ticket) + ' 🔗</a></span>' +
-                //     '<span class="ticket-total">' + (Math.round(tdata.totalHours*10)/10) + 'h total</span>' +
-                //     '</div>' +
-                //     '<span class="expand-icon">▼</span>' +
-                //     '</div>' +
-                //     '<div class="ticket-card-body">' + bodyHtml + '</div>';
                 const ticketMeta = getTicketMeta(ticket);
-const ticketSubject = ticketMeta?.subject || '';
+                const ticketSubject = ticketMeta?.subject || '';
 
-card.innerHTML =
-    '<div class="ticket-card-header" onclick="toggleCard(this)">' +
-    '<div class="ticket-card-header-left">' +
-    '<div class="ticket-main">' +
-    '<span class="ticket-id"><a href="' + url + '" target="_blank">' + escHtml(ticket) + ' 🔗</a></span>' +
-    (ticketSubject ? '<div class="ticket-subject">' + escHtml(ticketSubject) + '</div>' : '') +
-    '</div>' +
-    '<span class="ticket-total">' + (Math.round(tdata.totalHours*10)/10) + 'h total</span>' +
-    '</div>' +
-    '<span class="expand-icon">▼</span>' +
-    '</div>' +
-    '<div class="ticket-card-body">' + bodyHtml + '</div>';
+                card.innerHTML =
+                    '<div class="ticket-card-header" onclick="toggleCard(this)">' +
+                    '<div class="ticket-card-header-left">' +
+                    '<div class="ticket-main">' +
+                    '<span class="ticket-id"><a href="' + url + '" target="_blank">' + escHtml(ticket) + ' 🔗</a></span>' +
+                    (ticketSubject ? '<div class="ticket-subject">' + escHtml(ticketSubject) + '</div>' : '') +
+                    '</div>' +
+                    '<span class="ticket-total">' + (Math.round(tdata.totalHours*10)/10) + 'h total</span>' +
+                    '</div>' +
+                    '<span class="expand-icon">▼</span>' +
+                    '</div>' +
+                    '<div class="ticket-card-body">' + bodyHtml + '</div>';
 
                 ticketCards.appendChild(card);
             });
@@ -1399,6 +1641,8 @@ card.innerHTML =
                 mBody.appendChild(tr);
             });
         }
+
+        hideLoading();
     }
 
     function toggleCard(header) {
@@ -1417,104 +1661,92 @@ card.innerHTML =
     // ============================================================
     // TAB SWITCHING
     // ============================================================
+
     function exportAnalyticsToExcel() {
-    const wb = XLSX.utils.book_new();
+        const wb = XLSX.utils.book_new();
 
-    // ── Sheet 1: Summary KPIs ─────────────────────────────────
-    const kpiData = [
-        ['Metric', 'Value'],
-        ['Total Hours Logged', document.getElementById('totalHours').textContent],
-        ['Active Members', document.getElementById('teamCount').textContent],
-        ['Unique Tickets', document.getElementById('ticketCount').textContent],
-        ['Avg Hours / Member', document.getElementById('avgHours').textContent],
-        ['Export Date', new Date().toLocaleString()]
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiData), 'Summary');
+        const kpiData = [
+            ['Metric', 'Value'],
+            ['Total Hours Logged', document.getElementById('totalHours').textContent],
+            ['Active Members', document.getElementById('teamCount').textContent],
+            ['Unique Tickets', document.getElementById('ticketCount').textContent],
+            ['Avg Hours / Member', document.getElementById('avgHours').textContent],
+            ['Export Date', new Date().toLocaleString()]
+        ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiData), 'Summary');
 
-    // ── Sheet 2: Activity Breakdown ───────────────────────────
-    const actRows = [['Activity', 'Hours', '% of Total']];
-    document.querySelectorAll('#activityBreakdownBody tr').forEach(tr => {
-        const cells = tr.querySelectorAll('td');
-        if (cells.length >= 3) {
-            actRows.push([
-                cells[0].textContent.trim(),
-                cells[1].textContent.trim(),
-                cells[2].textContent.trim() + '%'
-            ]);
-        }
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(actRows), 'Activity Breakdown');
+        const actRows = [['Activity', 'Hours', '% of Total']];
+        document.querySelectorAll('#activityBreakdownBody tr').forEach(tr => {
+            const cells = tr.querySelectorAll('td');
+            if (cells.length >= 3) {
+                actRows.push([
+                    cells[0].textContent.trim(),
+                    cells[1].textContent.trim(),
+                    cells[2].textContent.trim() + '%'
+                ]);
+            }
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(actRows), 'Activity Breakdown');
 
-    // ── Sheet 3: Ticket Details ───────────────────────────────
-    const ticketRows = [['Ticket ID', 'Subject', 'Ticket URL', 'Total Hours', 'Member', ...ACTIVITY_TYPES]];
-    document.querySelectorAll('#ticketCards .ticket-card').forEach(card => {
-        const header = card.querySelector('.ticket-id a');
-        const ticketId = header ? header.textContent.replace('🔗','').trim() : '';
-        const subjectEl = card.querySelector('.ticket-subject');
-        const subject = subjectEl ? subjectEl.textContent.trim() : '';
-        const url = header ? header.href : '';
-        const totalEl = card.querySelector('.ticket-total');
-        const total = totalEl ? totalEl.textContent.replace('h total','').trim() : '';
+        const ticketRows = [['Ticket ID', 'Subject', 'Ticket URL', 'Total Hours', 'Member', ...ACTIVITY_TYPES]];
+        document.querySelectorAll('#ticketCards .ticket-card').forEach(card => {
+            const header = card.querySelector('.ticket-id a');
+            const ticketId = header ? header.textContent.replace('🔗','').trim() : '';
+            const subjectEl = card.querySelector('.ticket-subject');
+            const subject = subjectEl ? subjectEl.textContent.trim() : '';
+            const url = header ? header.href : '';
+            const totalEl = card.querySelector('.ticket-total');
+            const total = totalEl ? totalEl.textContent.replace('h total','').trim() : '';
 
-        // Per-member rows inside this ticket's body table
-        const bodyRows = card.querySelectorAll('.ticket-card-body tbody tr');
-        if (bodyRows.length === 0) {
-            ticketRows.push([ticketId, subject, url, total, '', ...ACTIVITY_TYPES.map(() => '')]);
-        } else {
-            bodyRows.forEach((tr, i) => {
-                const tds = tr.querySelectorAll('td');
-                const member = tds[0] ? tds[0].textContent.trim() : '';
-   
-    //     }
-    // });
-      // Read the actual rendered activity columns from thead
-    // to correctly map hours to the right activity (only relevantActs are rendered)
-    const table = tr.closest('table');
-    const headerCells = table ? Array.from(table.querySelectorAll('thead th')) : [];
-    // headerCells[0] = "Member", [1..n-2] = activity names, [n-1] = "Total"
-    const renderedActivities = headerCells.slice(1, headerCells.length - 1).map(th => th.textContent.trim());
+            const bodyRows = card.querySelectorAll('.ticket-card-body tbody tr');
+            if (bodyRows.length === 0) {
+                ticketRows.push([ticketId, subject, url, total, '', ...ACTIVITY_TYPES.map(() => '')]);
+            } else {
+                bodyRows.forEach((tr, i) => {
+                    const tds = tr.querySelectorAll('td');
+                    const member = tds[0] ? tds[0].textContent.trim() : '';
+                    const table = tr.closest('table');
+                    const headerCells = table ? Array.from(table.querySelectorAll('thead th')) : [];
+                    const renderedActivities = headerCells.slice(1, headerCells.length - 1).map(th => th.textContent.trim());
 
-    // Map each ACTIVITY_TYPE to its correct cell using rendered column order
-    const actHours = ACTIVITY_TYPES.map(actName => {
-        const colIdx = renderedActivities.indexOf(actName);
-        if (colIdx === -1) return ''; // this activity not rendered for this ticket
-        const cell = tds[colIdx + 1]; // +1 because tds[0] is Member
-        return cell ? cell.textContent.trim().replace('h', '') : '';
-    });
+                    const actHours = ACTIVITY_TYPES.map(actName => {
+                        const colIdx = renderedActivities.indexOf(actName);
+                        if (colIdx === -1) return '';
+                        const cell = tds[colIdx + 1];
+                        return cell ? cell.textContent.trim().replace('h', '') : '';
+                    });
 
-    ticketRows.push([
-        i === 0 ? ticketId : '',
-        i === 0 ? subject : '',
-        i === 0 ? url : '',
-        i === 0 ? total : '',
-        member,
-        ...actHours
-    ]);
-});     
-                 }
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ticketRows), 'Ticket Details');
+                    ticketRows.push([
+                        i === 0 ? ticketId : '',
+                        i === 0 ? subject : '',
+                        i === 0 ? url : '',
+                        i === 0 ? total : '',
+                        member,
+                        ...actHours
+                    ]);
+                });
+            }
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ticketRows), 'Ticket Details');
 
-    // ── Sheet 4: Member Summary ───────────────────────────────
-    const memberRows = [['Member', 'Total Hours', 'Log Entries', 'Tickets Worked']];
-    document.querySelectorAll('#memberSummary tr').forEach(tr => {
-        const tds = tr.querySelectorAll('td');
-        if (tds.length >= 4) {
-            memberRows.push([
-                tds[0].textContent.trim(),
-                tds[1].textContent.trim().replace('h', ''),
-                tds[2].textContent.trim(),
-                tds[3].textContent.trim()
-            ]);
-        }
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(memberRows), 'Member Summary');
+        const memberRows = [['Member', 'Total Hours', 'Log Entries', 'Tickets Worked']];
+        document.querySelectorAll('#memberSummary tr').forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length >= 4) {
+                memberRows.push([
+                    tds[0].textContent.trim(),
+                    tds[1].textContent.trim().replace('h', ''),
+                    tds[2].textContent.trim(),
+                    tds[3].textContent.trim()
+                ]);
+            }
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(memberRows), 'Member Summary');
 
-    // ── Export ────────────────────────────────────────────────
-    const dateStr = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `team-analytics-${dateStr}.xlsx`);
-}
-    
+        const dateStr = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(wb, `team-analytics-${dateStr}.xlsx`);
+    }
+
     function switchTab(tabId, btn) {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1528,8 +1760,8 @@ card.innerHTML =
     // IMPORT / EXPORT
     // ============================================================
 
-    // USER EXPORT — only exports current user's data (no blanks for others)
     async function openExportModal() {
+        showLoading('Preparing export...');
         await saveDay();
         const data = await getTimesheetData(currentUser);
         const exportObj = {
@@ -1539,14 +1771,15 @@ card.innerHTML =
         };
         document.getElementById('exportData').value = JSON.stringify(exportObj, null, 2);
         document.getElementById('exportModal').classList.add('show');
+        hideLoading();
     }
 
-    // ADMIN EXPORT — exports all users that actually have data
     async function openAdminExportModal() {
+        showLoading('Preparing admin export...');
         const allData = {};
         for (const m of TEAM_MEMBERS) {
             const d = await getTimesheetData(m);
-            if (Object.keys(d).length > 0) allData[m] = d;  // skip blank users
+            if (Object.keys(d).length > 0) allData[m] = d;
         }
         const exportObj = {
             exportDate: new Date().toISOString(),
@@ -1555,31 +1788,33 @@ card.innerHTML =
         };
         document.getElementById('adminExportData').value = JSON.stringify(exportObj, null, 2);
         document.getElementById('adminExportModal').classList.add('show');
+        hideLoading();
     }
 
-    // USER IMPORT — replaces current user's data with imported file
     function importTimesheet(event) {
         const file = event.target.files[0];
         if (!file) return;
+        showLoading('Importing timesheet...');
         const reader = new FileReader();
         reader.onload = async e => {
             try {
                 const parsed = JSON.parse(e.target.result);
                 const incoming = migrateData(parsed.data || parsed);
-                // For user self-import, replace (they are importing their own backup)
                 await saveTimesheetData(currentUser, incoming);
                 await loadDayEntries();
                 showSuccess('✅ Timesheet imported successfully!');
             } catch { alert('Error: Invalid JSON format'); }
+            hideLoading();
         };
         reader.readAsText(file);
         event.target.value = '';
     }
 
-    // ADMIN IMPORT — accepts multiple files, APPENDS data (no replacement)
     function importTeamData(event) {
         const files = Array.from(event.target.files);
         if (!files.length) return;
+
+        showLoading('Importing team data...');
 
         let processed = 0;
         const results = [];
@@ -1593,7 +1828,6 @@ card.innerHTML =
                     let importedMembers = [];
 
                     if (parsed.teamData) {
-                        // It's a team/analytics export
                         for (const member in parsed.teamData) {
                             const existing = await getTimesheetData(member);
                             const incoming  = migrateData(parsed.teamData[member]);
@@ -1602,7 +1836,6 @@ card.innerHTML =
                             importedMembers.push(member);
                         }
                     } else if (parsed.username && parsed.data) {
-                        // It's a single-user export
                         const member   = parsed.username;
                         const existing = await getTimesheetData(member);
                         const incoming  = migrateData(parsed.data);
@@ -1610,7 +1843,6 @@ card.innerHTML =
                         await saveTimesheetData(member, merged);
                         importedMembers.push(member);
                     } else {
-                        // Raw data object — try treating as single-user data for currentUser
                         const existing = await getTimesheetData(currentUser);
                         const incoming  = migrateData(parsed);
                         const merged    = mergeTimesheetData(existing, incoming);
@@ -1634,6 +1866,7 @@ card.innerHTML =
     }
 
     function finishTeamImport(results) {
+        hideLoading();
         loadAdminDashboard();
 
         const okCount  = results.filter(r => r.ok).length;

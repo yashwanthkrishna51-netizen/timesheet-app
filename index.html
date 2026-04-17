@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+​<!DOCTYPE html>
 <html lang="en">
 <head>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -433,6 +433,31 @@
             .hours-widget { flex-wrap: wrap; }
             .member-hours-widget { flex-wrap: wrap; }
         }
+
+
+        /* Notes in pivot table cell */
+        .cell-notes {
+            display: block;
+            font-size: 10px;
+            color: #888;
+            margin-top: 3px;
+            font-style: italic;
+            line-height: 1.3;
+            max-width: 140px;
+            white-space: normal;
+            word-break: break-word;
+        }
+        /* ===== NOTES IN ANALYTICS TICKET TABLE ===== */
+        .notes-td {
+            font-size: 12px;
+            color: #555;
+            font-style: italic;
+            max-width: 220px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .notes-td:empty::before { content: '—'; color: #ccc; }
+        .export-btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
     </style>
 </head>
 <body>
@@ -624,8 +649,8 @@
             <div class="button-group">
                 <button class="btn btn-secondary" onclick="document.getElementById('importTeamFiles').click()">📤 Import &amp; Append JSONs</button>
                 <input type="file" id="importTeamFiles" class="file-input" accept=".json" multiple onchange="importTeamData(event)">
-                <button class="btn btn-secondary" onclick="openAdminExportModal()">📥 Export Analytics</button>
-                <button class="btn btn-primary" onclick="exportAnalyticsToExcel()">📊 Export to Excel</button>
+                <button class="btn btn-secondary" onclick="openAdminExportModal()">📥 Export Team JSON</button>
+                <button class="btn btn-primary" onclick="exportAnalyticsToExcel()">📊 Export to Excel + JSON</button>
             </div>
         </div>
     </div>
@@ -1344,9 +1369,15 @@
                 dayTotals[idx] += hrs;
                 rowTotal += hrs;
                 const acts = [...actSet].join(', ');
+                // Collect notes for this cell
+                const cellNotes = [];
+                dayEntries.forEach(e => { if (e.notes && e.notes.trim()) cellNotes.push(e.notes.trim()); });
+                const uniqueNotes = [...new Set(cellNotes)];
                 if (hrs > 0) {
                     html += '<td class="hours-cell has-hours"><span class="cell-hours">' + hrs + 'h</span>' +
-                        (acts ? '<span class="cell-activity">' + escHtml(acts) + '</span>' : '') + '</td>';
+                        (acts ? '<span class="cell-activity">' + escHtml(acts) + '</span>' : '') +
+                        (uniqueNotes.length > 0 ? '<span class="cell-notes">' + escHtml(uniqueNotes.join('; ')) + '</span>' : '') +
+                        '</td>';
                 } else {
                     html += '<td class="hours-cell"><span style="color:#ddd">—</span></td>';
                 }
@@ -1448,9 +1479,15 @@
                 dayTotals[idx] += hrs;
                 rowTotal += hrs;
                 const acts = [...actSet].join(', ');
+                // Collect notes for this cell
+                const cellNotes = [];
+                dayEntries.forEach(e => { if (e.notes && e.notes.trim()) cellNotes.push(e.notes.trim()); });
+                const uniqueNotes = [...new Set(cellNotes)];
                 if (hrs > 0) {
                     html += '<td class="hours-cell has-hours"><span class="cell-hours">' + hrs + 'h</span>' +
-                        (acts ? '<span class="cell-activity">' + escHtml(acts) + '</span>' : '') + '</td>';
+                        (acts ? '<span class="cell-activity">' + escHtml(acts) + '</span>' : '') +
+                        (uniqueNotes.length > 0 ? '<span class="cell-notes">' + escHtml(uniqueNotes.join('; ')) + '</span>' : '') +
+                        '</td>';
                 } else {
                     html += '<td class="hours-cell"><span style="color:#ddd">—</span></td>';
                 }
@@ -1506,10 +1543,16 @@
 
                     if (!ticketMap[ticket]) ticketMap[ticket] = { totalHours: 0, members: {} };
                     ticketMap[ticket].totalHours += entryTotal;
-                    if (!ticketMap[ticket].members[member]) ticketMap[ticket].members[member] = { acts: {} };
+                    if (!ticketMap[ticket].members[member]) ticketMap[ticket].members[member] = { acts: {}, notes: [] };
                     Object.entries(ah).forEach(([a,h]) => {
                         ticketMap[ticket].members[member].acts[a] = (ticketMap[ticket].members[member].acts[a]||0) + (parseFloat(h)||0);
                     });
+                    if (entry.notes && entry.notes.trim()) {
+                        const noteEntry = '[' + date + '] ' + entry.notes.trim();
+                        if (!ticketMap[ticket].members[member].notes.includes(noteEntry)) {
+                            ticketMap[ticket].members[member].notes.push(noteEntry);
+                        }
+                    }
 
                     if (!memberMap[member]) memberMap[member] = { totalHours:0, entries:0, tickets: new Set(), acts:{} };
                     memberMap[member].totalHours  += entryTotal;
@@ -1575,7 +1618,7 @@
                         bodyHtml += '<th class="num-col">' + escHtml(a) + '</th>';
                     }
                 });
-                bodyHtml += '<th class="num-col">Total</th></tr></thead><tbody>';
+                bodyHtml += '<th class="num-col">Total</th><th>Notes / Comments</th></tr></thead><tbody>';
 
                 const relevantActs = ACTIVITY_TYPES.filter(a =>
                     Object.values(tdata.members).some(m => m.acts[a])
@@ -1587,11 +1630,16 @@
                     return tb - ta;
                 }).forEach(([mem, mdata]) => {
                     const memTotal = Object.values(mdata.acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
+                    const memberNotesList = mdata.notes || [];
+                    const notesDisplay = memberNotesList.length > 0
+                        ? memberNotesList.map(n => escHtml(n)).join('<br>')
+                        : '<span style="color:#ccc;font-size:11px">—</span>';
                     bodyHtml += '<tr><td>' + escHtml(mem) + '</td>';
                     relevantActs.forEach(a => {
                         bodyHtml += '<td class="num-col">' + (mdata.acts[a] ? (Math.round(mdata.acts[a]*10)/10)+'h' : '—') + '</td>';
                     });
-                    bodyHtml += '<td class="num-col"><strong>' + (Math.round(memTotal*10)/10) + 'h</strong></td></tr>';
+                    bodyHtml += '<td class="num-col"><strong>' + (Math.round(memTotal*10)/10) + 'h</strong></td>';
+                    bodyHtml += '<td class="notes-td">' + notesDisplay + '</td></tr>';
                 });
                 bodyHtml += '</tbody></table>';
 
@@ -1662,9 +1710,15 @@
     // TAB SWITCHING
     // ============================================================
 
-    function exportAnalyticsToExcel() {
+    async function exportAnalyticsToExcel() {
+        showLoading('Building Excel export + timesheets.json...');
+
+        // ── Collect raw timesheets data from GitHub for full notes access ──
+        const allTimesheets = await getAllTimesheetsFromGitHub();
+
         const wb = XLSX.utils.book_new();
 
+        // ── Sheet 1: Summary KPIs ──
         const kpiData = [
             ['Metric', 'Value'],
             ['Total Hours Logged', document.getElementById('totalHours').textContent],
@@ -1675,6 +1729,7 @@
         ];
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiData), 'Summary');
 
+        // ── Sheet 2: Activity Breakdown ──
         const actRows = [['Activity', 'Hours', '% of Total']];
         document.querySelectorAll('#activityBreakdownBody tr').forEach(tr => {
             const cells = tr.querySelectorAll('td');
@@ -1688,19 +1743,53 @@
         });
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(actRows), 'Activity Breakdown');
 
-        const ticketRows = [['Ticket ID', 'Subject', 'Ticket URL', 'Total Hours', 'Member', ...ACTIVITY_TYPES]];
+        // ── Sheet 3: Ticket Details with Notes per member ──
+        // Build a map: ticketId -> member -> { acts, notes[] }
+        const ticketMemberNotesMap = {};
+        const filterFrom = document.getElementById('filterFrom').value;
+        const filterTo   = document.getElementById('filterTo').value;
+
+        for (const member of TEAM_MEMBERS) {
+            const memberData = allTimesheets[member];
+            if (!memberData) continue;
+            const migrated = migrateData(memberData);
+            for (const date in migrated) {
+                if (filterFrom && date < filterFrom) continue;
+                if (filterTo   && date > filterTo)   continue;
+                (migrated[date] || []).forEach(entry => {
+                    const ticket = entry.ticket || '(no ticket)';
+                    if (!ticketMemberNotesMap[ticket]) ticketMemberNotesMap[ticket] = {};
+                    if (!ticketMemberNotesMap[ticket][member]) {
+                        ticketMemberNotesMap[ticket][member] = { acts: {}, notes: [] };
+                    }
+                    const ah = entry.activityHours || {};
+                    Object.entries(ah).forEach(([a, h]) => {
+                        ticketMemberNotesMap[ticket][member].acts[a] =
+                            (ticketMemberNotesMap[ticket][member].acts[a] || 0) + (parseFloat(h) || 0);
+                    });
+                    if (entry.notes && entry.notes.trim()) {
+                        const noteEntry = `[${date}] ${entry.notes.trim()}`;
+                        if (!ticketMemberNotesMap[ticket][member].notes.includes(noteEntry)) {
+                            ticketMemberNotesMap[ticket][member].notes.push(noteEntry);
+                        }
+                    }
+                });
+            }
+        }
+
+        const ticketRows = [['Ticket ID', 'Subject', 'Ticket URL', 'Total Hours', 'Member', ...ACTIVITY_TYPES, 'Notes / Comments']];
         document.querySelectorAll('#ticketCards .ticket-card').forEach(card => {
-            const header = card.querySelector('.ticket-id a');
-            const ticketId = header ? header.textContent.replace('🔗','').trim() : '';
+            const headerEl = card.querySelector('.ticket-id a');
+            const ticketId = headerEl ? headerEl.textContent.replace('🔗','').trim() : '';
             const subjectEl = card.querySelector('.ticket-subject');
             const subject = subjectEl ? subjectEl.textContent.trim() : '';
-            const url = header ? header.href : '';
+            const url = headerEl ? headerEl.href : '';
             const totalEl = card.querySelector('.ticket-total');
             const total = totalEl ? totalEl.textContent.replace('h total','').trim() : '';
 
             const bodyRows = card.querySelectorAll('.ticket-card-body tbody tr');
             if (bodyRows.length === 0) {
-                ticketRows.push([ticketId, subject, url, total, '', ...ACTIVITY_TYPES.map(() => '')]);
+                ticketRows.push([ticketId, subject, url, total, '', ...ACTIVITY_TYPES.map(() => ''), '']);
             } else {
                 bodyRows.forEach((tr, i) => {
                     const tds = tr.querySelectorAll('td');
@@ -1716,19 +1805,26 @@
                         return cell ? cell.textContent.trim().replace('h', '') : '';
                     });
 
+                    // Get notes from the raw data map
+                    const memberNotes = (ticketMemberNotesMap[ticketId] && ticketMemberNotesMap[ticketId][member])
+                        ? ticketMemberNotesMap[ticketId][member].notes.join(' | ')
+                        : '';
+
                     ticketRows.push([
                         i === 0 ? ticketId : '',
                         i === 0 ? subject : '',
                         i === 0 ? url : '',
                         i === 0 ? total : '',
                         member,
-                        ...actHours
+                        ...actHours,
+                        memberNotes
                     ]);
                 });
             }
         });
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ticketRows), 'Ticket Details');
 
+        // ── Sheet 4: Member Summary ──
         const memberRows = [['Member', 'Total Hours', 'Log Entries', 'Tickets Worked']];
         document.querySelectorAll('#memberSummary tr').forEach(tr => {
             const tds = tr.querySelectorAll('td');
@@ -1743,8 +1839,83 @@
         });
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(memberRows), 'Member Summary');
 
+        // ── Sheet 5: All Notes / Comments (flat log) ──
+        const notesRows = [['Date', 'Member', 'Ticket ID', 'Notes / Comments', ...ACTIVITY_TYPES]];
+        for (const member of TEAM_MEMBERS) {
+            const memberData = allTimesheets[member];
+            if (!memberData) continue;
+            const migrated = migrateData(memberData);
+            const sortedDates = Object.keys(migrated).sort();
+            for (const date of sortedDates) {
+                if (filterFrom && date < filterFrom) continue;
+                if (filterTo   && date > filterTo)   continue;
+                (migrated[date] || []).forEach(entry => {
+                    if (!entry.notes || !entry.notes.trim()) return;
+                    const ah = entry.activityHours || {};
+                    const actVals = ACTIVITY_TYPES.map(a => ah[a] ? (Math.round((parseFloat(ah[a])||0)*10)/10) : '');
+                    notesRows.push([
+                        date,
+                        member,
+                        entry.ticket || '',
+                        entry.notes.trim(),
+                        ...actVals
+                    ]);
+                });
+            }
+        }
+        if (notesRows.length > 1) {
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(notesRows), 'Notes & Comments');
+        }
+
+        // ── Sheet 6: Raw Entries (all data flat) ──
+        const rawRows = [['Date', 'Member', 'Ticket ID', 'Notes', ...ACTIVITY_TYPES, 'Total Hours']];
+        for (const member of TEAM_MEMBERS) {
+            const memberData = allTimesheets[member];
+            if (!memberData) continue;
+            const migrated = migrateData(memberData);
+            const sortedDates = Object.keys(migrated).sort();
+            for (const date of sortedDates) {
+                if (filterFrom && date < filterFrom) continue;
+                if (filterTo   && date > filterTo)   continue;
+                (migrated[date] || []).forEach(entry => {
+                    const ah = entry.activityHours || {};
+                    const actVals = ACTIVITY_TYPES.map(a => ah[a] ? (Math.round((parseFloat(ah[a])||0)*10)/10) : '');
+                    const total = Object.values(ah).reduce((s,h) => s+(parseFloat(h)||0), 0);
+                    rawRows.push([
+                        date,
+                        member,
+                        entry.ticket || '',
+                        entry.notes || '',
+                        ...actVals,
+                        Math.round(total*10)/10
+                    ]);
+                });
+            }
+        }
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rawRows), 'Raw Entries');
+
         const dateStr = new Date().toISOString().slice(0, 10);
         XLSX.writeFile(wb, `team-analytics-${dateStr}.xlsx`);
+
+        // ── Also download timesheets.json ──
+        try {
+            const timesheetsContent = await getFileFromGitHub(GITHUB_CONFIG.timesheetsFile);
+            if (timesheetsContent) {
+                const blob = new Blob([timesheetsContent], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `timesheets-${dateStr}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+            }
+        } catch(e) {
+            console.warn('Could not download timesheets.json:', e);
+        }
+
+        hideLoading();
+        showSuccess('✅ Excel + timesheets.json exported successfully!');
     }
 
     function switchTab(tabId, btn) {

@@ -458,6 +458,45 @@
         }
         .notes-td:empty::before { content: '—'; color: #ccc; }
         .export-btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+
+        /* ===== TIMESHEET LOCK ===== */
+        .lock-banner {
+            display: none;
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 10px 16px;
+            margin-bottom: 14px;
+            font-size: 13px;
+            font-weight: 600;
+            align-items: center;
+            gap: 8px;
+        }
+        .lock-banner.show { display: flex; }
+        .admin-lock-panel {
+            background: #f8f9fa;
+            border: 1px solid #e8e8e8;
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .admin-lock-panel h3 { font-size: 14px; font-weight: 700; color: #444; margin: 0; }
+        .lock-status-pill {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+        }
+        .lock-status-pill.locked { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+        .lock-status-pill.unlocked { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .btn-lock { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+        .btn-lock:hover { background: #ffe69c; }
+        .btn-unlock { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .btn-unlock:hover { background: #b8dfc4; }
+        .lock-desc { font-size: 12px; color: #888; margin: 0; }
     </style>
 </head>
 <body>
@@ -518,6 +557,7 @@
                 <div id="dailyTotalBadge" class="daily-total-badge">Total: 0h / 8h</div>
             </div>
 
+            <div id="lockBanner" class="lock-banner">🔒 This date is locked. Past dates cannot be edited. Contact your admin.</div>
             <div class="entries-wrapper">
                 <table class="entries-table" id="entriesTable">
                     <thead id="entriesHead">
@@ -568,6 +608,16 @@
 
         <!-- TEAM ANALYTICS (ADMIN ONLY) -->
         <div id="admin" class="tab-content">
+            <!-- TIMESHEET LOCK SETTINGS -->
+            <div class="admin-lock-panel">
+                <div>
+                    <h3>🔒 Timesheet Lock Settings</h3>
+                    <p class="lock-desc">When locked, only the current week and future dates are open for filling. All prior dates become read-only for all users.</p>
+                </div>
+                <div id="lockStatusPill" class="lock-status-pill unlocked">✅ Unlocked</div>
+                <button id="lockToggleBtn" class="btn btn-secondary" onclick="toggleTimesheetLock()">🔒 Lock Past Timesheets</button>
+            </div>
+
             <div class="analytics-top">
                 <h2>Team Analytics</h2>
                 <div class="filter-row">
@@ -703,6 +753,91 @@
 </div>
 
 <script>
+
+    // ============================================================
+    // TIMESHEET LOCK
+    // ============================================================
+
+    let _timesheetLockState = null; // cached: true=locked, false=unlocked
+
+    async function getLockSettings() {
+        try {
+            const content = await getFileFromGitHub(GITHUB_CONFIG.timesheetLockFile);
+            if (!content) return { locked: false };
+            return JSON.parse(content);
+        } catch(e) {
+            return { locked: false };
+        }
+    }
+
+    async function saveLockSettings(locked) {
+        const content = JSON.stringify({ locked, updatedAt: new Date().toISOString(), updatedBy: currentUser }, null, 2);
+        return await saveFileToGitHub(GITHUB_CONFIG.timesheetLockFile, content, `Timesheet lock ${locked ? 'enabled' : 'disabled'} by ${currentUser}`);
+    }
+
+    function isDateLocked(dateStr, locked) {
+        if (!locked) return false;
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        // Get Monday of current week
+        const dayOfWeek = today.getDay() || 7;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - dayOfWeek + 1);
+        monday.setHours(0,0,0,0);
+        const d = new Date(dateStr);
+        d.setHours(0,0,0,0);
+        return d < monday;
+    }
+
+    function applyLockToUI(locked) {
+        const banner = document.getElementById('lockBanner');
+        const inputs = document.querySelectorAll('#entriesBody input, #entriesBody button');
+        const addRowBtn = document.querySelector('.btn[onclick="addEntry()"]');
+        const saveBtn = document.querySelector('.btn[onclick="saveDay()"]');
+        if (locked) {
+            banner.classList.add('show');
+            inputs.forEach(el => el.disabled = true);
+            if (addRowBtn) addRowBtn.disabled = true;
+            if (saveBtn) saveBtn.disabled = true;
+        } else {
+            banner.classList.remove('show');
+            inputs.forEach(el => el.disabled = false);
+            if (addRowBtn) addRowBtn.disabled = false;
+            if (saveBtn) saveBtn.disabled = false;
+        }
+    }
+
+    async function toggleTimesheetLock() {
+        const btn = document.getElementById('lockToggleBtn');
+        btn.disabled = true;
+        showLoading('Updating lock settings...');
+        const current = await getLockSettings();
+        const newState = !current.locked;
+        await saveLockSettings(newState);
+        _timesheetLockState = newState;
+        renderLockStatus(newState);
+        hideLoading();
+        btn.disabled = false;
+        showSuccess(newState ? '🔒 Timesheets locked — only current week and future are editable.' : '🔓 Timesheets unlocked — all dates are editable.');
+    }
+
+    function renderLockStatus(locked) {
+        const pill = document.getElementById('lockStatusPill');
+        const btn = document.getElementById('lockToggleBtn');
+        if (!pill || !btn) return;
+        if (locked) {
+            pill.className = 'lock-status-pill locked';
+            pill.textContent = '🔒 Locked';
+            btn.className = 'btn btn-unlock';
+            btn.textContent = '🔓 Unlock Timesheets';
+        } else {
+            pill.className = 'lock-status-pill unlocked';
+            pill.textContent = '✅ Unlocked';
+            btn.className = 'btn btn-lock';
+            btn.textContent = '🔒 Lock Past Timesheets';
+        }
+    }
+
     // ============================================================
     // LOADING OVERLAY UTILS
     // ============================================================
@@ -828,6 +963,11 @@
         document.getElementById('userDisplay').textContent = '👤 ' + currentUser;
         document.getElementById('adminBadge').style.display = currentUserIsAdmin ? 'inline-block' : 'none';
         document.getElementById('adminTabBtn').classList.toggle('hidden', !currentUserIsAdmin);
+        // Pre-load lock state
+        getLockSettings().then(s => {
+            _timesheetLockState = s.locked;
+            renderLockStatus(s.locked);
+        });
 
         showLoading('Loading tickets...');
         allTickets = await loadTicketsFromCSV();
@@ -942,7 +1082,8 @@
     const GITHUB_CONFIG = {
         apiProxy: '/api/github-proxy',
         timesheetsFile: 'data/timesheets.json',
-        ticketsFile: 'tickets/tickets.csv'
+        ticketsFile: 'tickets/tickets.csv',
+        timesheetLockFile: 'data/timesheet_lock.json'
     };
 
     // ============================================================
@@ -1213,7 +1354,7 @@
             const filled = val !== '' && val !== 0 && val !== '0';
             html += '<td class="act-cell">' +
                 '<input type="number" class="hours-act-input act-hours" data-activity="' + escHtml(a) + '" ' +
-                'placeholder="—" value="' + (val || '') + '" step="0.5" min="0" max="24" ' +
+                'placeholder="—" value="' + (val || '') + '" step="0.25" min="0" max="24" ' +
                 (filled ? 'style="background:#f0f4ff;border-color:#c4ceff;font-weight:600;color:#667eea"' : '') +
                 ' oninput="onActHoursInput(this)">' +
                 '</td>';
@@ -1924,7 +2065,13 @@
         document.getElementById(tabId).classList.add('active');
         if (btn) btn.classList.add('active');
         if (tabId === 'weeklyView') loadWeeklyView();
-        if (tabId === 'admin') loadAdminDashboard();
+        if (tabId === 'admin') {
+            loadAdminDashboard();
+            getLockSettings().then(s => {
+                _timesheetLockState = s.locked;
+                renderLockStatus(s.locked);
+            });
+        }
     }
 
     // ============================================================

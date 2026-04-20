@@ -1383,27 +1383,59 @@ let _ticketCurrentPage = 1;
     // MY TIMESHEET — DAY VIEW
     // ============================================================
 
+    // async function loadDayEntries1() {
+    //     showLoading('Loading entries...');
+    //     const date = document.getElementById('datePicker').value;
+    //     if (!date) {
+    //         hideLoading();
+    //         return;
+    //     }
+
+    //     const data = await getTimesheetData(currentUser);
+    //     const entries = data[date] || [];
+    //     const tbody = document.getElementById('entriesBody');
+    //     tbody.innerHTML = '';
+
+    //     if (entries.length === 0) {
+    //         renderEntryRow({ ticket: '', activityHours: {}, notes: '' });
+    //     } else {
+    //         entries.forEach(e => renderEntryRow(e));
+    //     }
+    //     updateDailyTotal();
+    //     hideLoading();
+    // }
     async function loadDayEntries() {
-        showLoading('Loading entries...');
-        const date = document.getElementById('datePicker').value;
-        if (!date) {
-            hideLoading();
-            return;
-        }
-
-        const data = await getTimesheetData(currentUser);
-        const entries = data[date] || [];
-        const tbody = document.getElementById('entriesBody');
-        tbody.innerHTML = '';
-
-        if (entries.length === 0) {
-            renderEntryRow({ ticket: '', activityHours: {}, notes: '' });
-        } else {
-            entries.forEach(e => renderEntryRow(e));
-        }
-        updateDailyTotal();
+    showLoading('Loading entries...');
+    const date = document.getElementById('datePicker').value;
+    if (!date) {
         hideLoading();
+        return;
     }
+
+    // Fetch lock state (cached after first fetch)
+    if (_timesheetLockState === null) {
+        const lockSettings = await getLockSettings();
+        _timesheetLockState = lockSettings.locked;
+    }
+
+    const data = await getTimesheetData(currentUser);
+    const entries = data[date] || [];
+    const tbody = document.getElementById('entriesBody');
+    tbody.innerHTML = '';
+
+    if (entries.length === 0) {
+        renderEntryRow({ ticket: '', activityHours: {}, notes: '' });
+    } else {
+        entries.forEach(e => renderEntryRow(e));
+    }
+    updateDailyTotal();
+
+    // Apply lock UI based on selected date
+    const locked = isDateLocked(date, _timesheetLockState);
+    applyLockToUI(locked);
+
+    hideLoading();
+}
 
     function addEntry() {
         renderEntryRow({ ticket: '', activityHours: {}, notes: '' });
@@ -1466,12 +1498,26 @@ let _ticketCurrentPage = 1;
         badge.className = 'daily-total-badge' + (total >= 8 ? ' ok' : total > 0 ? ' warn' : '');
     }
 
-    async function saveDay() {
-        const date = document.getElementById('datePicker').value;
-        if (!date) { alert('Please select a date.'); return; }
+    // async function saveDay() {
+    //     const date = document.getElementById('datePicker').value;
+    //     if (!date) { alert('Please select a date.'); return; }
 
-        showLoading('Saving...');
+    //     showLoading('Saving...');
+async function saveDay() {
+    const date = document.getElementById('datePicker').value;
+    if (!date) { alert('Please select a date.'); return; }
 
+    // Hard lock guard — prevents save even if UI was bypassed
+    if (_timesheetLockState === null) {
+        const lockSettings = await getLockSettings();
+        _timesheetLockState = lockSettings.locked;
+    }
+    if (isDateLocked(date, _timesheetLockState)) {
+        alert('⛔ This date is locked. Past dates before the current week cannot be edited.');
+        return;
+    }
+
+    showLoading('Saving...');
         const entries = [];
         document.querySelectorAll('#entriesBody tr').forEach(row => {
             const ticket = row.querySelector('.entry-ticket').value.trim();
@@ -2481,6 +2527,174 @@ function ticketPageNav(page) {
     const totalPages = Math.max(1, Math.ceil(_filteredTicketRows.length / pageSize));
     _ticketCurrentPage = Math.max(1, Math.min(page, totalPages));
     renderTicketTable(pageSize, totalPages);
+}
+    // ============================================================
+// TIMESHEET LOCK
+// ============================================================
+
+async function getLockSettings() {
+    try {
+        const content = await getFileFromGitHub(GITHUB_CONFIG.timesheetLockFile);
+        if (!content) return { locked: false };
+        return JSON.parse(content);
+    } catch(e) { return { locked: false }; }
+}
+
+async function saveLockSettings(locked) {
+    const content = JSON.stringify({ locked, updatedAt: new Date().toISOString(), updatedBy: currentUser }, null, 2);
+    return await saveFileToGitHub(GITHUB_CONFIG.timesheetLockFile, content,
+        `Timesheet lock ${locked ? 'enabled' : 'disabled'} by ${currentUser}`);
+}
+
+function isDateLocked(dateStr, locked) {
+    if (!locked) return false;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const dayOfWeek = today.getDay() || 7;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - dayOfWeek + 1);
+    monday.setHours(0,0,0,0);
+    const d = new Date(dateStr);
+    d.setHours(0,0,0,0);
+    return d < monday;
+}
+
+function applyLockToUI(locked) {
+    const banner = document.getElementById('lockBanner');
+    const inputs = document.querySelectorAll('#entriesBody input, #entriesBody button');
+    const timesheetBtns = document.querySelectorAll('#timesheet .button-group .btn, #timesheet .button-group button');
+    if (locked) {
+        banner.classList.add('show');
+        inputs.forEach(el => el.disabled = true);
+        timesheetBtns.forEach(el => el.disabled = true);
+    } else {
+        banner.classList.remove('show');
+        inputs.forEach(el => el.disabled = false);
+        timesheetBtns.forEach(el => el.disabled = false);
+    }
+}
+
+async function toggleTimesheetLock() {
+    const btn = document.getElementById('lockToggleBtn');
+    btn.disabled = true;
+    showLoading('Updating lock settings...');
+    const current = await getLockSettings();
+    const newState = !current.locked;
+    await saveLockSettings(newState);
+    _timesheetLockState = newState;
+    renderLockStatus(newState);
+    hideLoading();
+    btn.disabled = false;
+    showSuccess(newState
+        ? '🔒 Timesheets locked — only current week and future are editable.'
+        : '🔓 Timesheets unlocked — all dates are editable.');
+}
+
+function renderLockStatus(locked) {
+    const pill = document.getElementById('lockStatusPill');
+    const btn = document.getElementById('lockToggleBtn');
+    if (!pill || !btn) return;
+    if (locked) {
+        pill.className = 'lock-status-pill locked';
+        pill.textContent = '🔒 Locked';
+        btn.className = 'btn btn-unlock';
+        btn.textContent = '🔓 Unlock Timesheets';
+    } else {
+        pill.className = 'lock-status-pill unlocked';
+        pill.textContent = '✅ Unlocked';
+        btn.className = 'btn btn-lock';
+        btn.textContent = '🔒 Lock Past Timesheets';
+    }
+}
+
+// ============================================================
+// TICKET TABLE PAGINATION
+// ============================================================
+
+function filterTicketTable() {
+    const search = (document.getElementById('ticketSearch').value || '').toLowerCase();
+    const member = document.getElementById('ticketMemberFilter').value;
+    const pageSize = parseInt(document.getElementById('ticketPageSize').value) || 10;
+    _filteredTicketRows = _allTicketRows.filter(row => {
+        const matchSearch = !search || row.ticket.toLowerCase().includes(search);
+        const matchMember = !member || Object.keys(row.info.members || {}).includes(member);
+        return matchSearch && matchMember;
+    });
+    const totalPages = Math.max(1, Math.ceil(_filteredTicketRows.length / pageSize));
+    if (_ticketCurrentPage > totalPages) _ticketCurrentPage = 1;
+    renderTicketTable(pageSize, totalPages);
+}
+
+function renderTicketTable(pageSize, totalPages) {
+    const start = (_ticketCurrentPage - 1) * pageSize;
+    const pageRows = _filteredTicketRows.slice(start, start + pageSize);
+    const tbody = document.getElementById('ticketTableBody');
+    if (pageRows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="no-data">No tickets found.</td></tr>';
+    } else {
+        tbody.innerHTML = pageRows.map(({ ticket, info }) => {
+            const url = getHappyFoxTicketUrl(ticket);
+            const meta = getTicketMeta(ticket);
+            const subject = meta?.subject || '';
+            const membersHtml = Object.entries(info.members || {})
+                .sort((a,b) => {
+                    const ta = Object.values(a[1].acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
+                    const tb = Object.values(b[1].acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
+                    return tb-ta;
+                })
+                .map(([m, md]) => {
+                    const actStr = Object.entries(md.acts||{}).sort((a,b)=>b[1]-a[1])
+                        .map(([a,h]) => escHtml(a)+' '+Math.round(h*10)/10+'h').join(', ');
+                    return '<div class="member-acts"><b>'+escHtml(m)+'</b>'+(actStr?': <span style="font-weight:400">'+actStr+'</span>':'')+' </div>';
+                }).join('');
+            const ticketActMap = {};
+            Object.values(info.members||{}).forEach(md => {
+                Object.entries(md.acts||{}).forEach(([a,h]) => {
+                    ticketActMap[a] = (ticketActMap[a]||0)+(parseFloat(h)||0);
+                });
+            });
+            const actBreakHtml = Object.entries(ticketActMap).sort((a,b)=>b[1]-a[1])
+                .map(([a,h]) => {
+                    const pct = info.totalHours>0?Math.round((h/info.totalHours)*100):0;
+                    return '<span class="act-pill" style="margin:2px 2px 2px 0;display:inline-block">'+
+                        escHtml(a)+' <b>'+Math.round(h*10)/10+'h</b>'+
+                        ' <span style="opacity:.55;font-size:10px">('+pct+'%)</span></span>';
+                }).join('');
+            return '<tr>'+
+                '<td><b>'+(ticket!=='(no ticket)'?
+                    '<a href="'+url+'" target="_blank" style="color:#333;text-decoration:none">'+escHtml(ticket)+' 🔗</a>':
+                    '(no ticket)')+'</b>'+
+                (subject?'<div style="font-size:11px;color:#888;margin-top:2px">'+escHtml(subject)+'</div>':'')+
+                '</td>'+
+                '<td>'+membersHtml+'</td>'+
+                '<td class="num-col">'+Math.round(info.totalHours*10)/10+'h</td>'+
+                '<td>'+(actBreakHtml||'<span style="color:#ccc">—</span>')+'</td>'+
+                '</tr>';
+        }).join('');
+    }
+    const pag = document.getElementById('ticketPagination');
+    const from = _filteredTicketRows.length===0?0:start+1;
+    const to = Math.min(start+pageSize, _filteredTicketRows.length);
+    let pagHtml = '<span class="page-info">Showing '+from+'–'+to+' of '+_filteredTicketRows.length+' tickets</span>';
+    pagHtml += '<div class="page-btns">';
+    pagHtml += '<button class="page-btn" onclick="ticketPageNav(1)" '+(_ticketCurrentPage===1?'disabled':'')+'>«</button>';
+    pagHtml += '<button class="page-btn" onclick="ticketPageNav('+(_ticketCurrentPage-1)+')" '+(_ticketCurrentPage===1?'disabled':'')+'>‹</button>';
+    let sp = Math.max(1,_ticketCurrentPage-3), ep = Math.min(totalPages,sp+6);
+    if(ep-sp<6) sp=Math.max(1,ep-6);
+    for(let p=sp;p<=ep;p++){
+        pagHtml+='<button class="page-btn'+(p===_ticketCurrentPage?' active':'')+'" onclick="ticketPageNav('+p+')">'+p+'</button>';
+    }
+    pagHtml += '<button class="page-btn" onclick="ticketPageNav('+(_ticketCurrentPage+1)+')" '+(_ticketCurrentPage===totalPages?'disabled':'')+'>›</button>';
+    pagHtml += '<button class="page-btn" onclick="ticketPageNav('+totalPages+')" '+(_ticketCurrentPage===totalPages?'disabled':'')+'>»</button>';
+    pagHtml += '</div>';
+    pag.innerHTML = pagHtml;
+}
+
+function ticketPageNav(page) {
+    const pageSize = parseInt(document.getElementById('ticketPageSize').value)||10;
+    const totalPages = Math.max(1,Math.ceil(_filteredTicketRows.length/pageSize));
+    _ticketCurrentPage = Math.max(1,Math.min(page,totalPages));
+    renderTicketTable(pageSize,totalPages);
 }
 </script>
 </body>

@@ -907,10 +907,19 @@
     <div class="header">
         <h1>⏱️ Timesheet Management</h1>
         <div class="user-info">
-            <div class="user-badge" id="userDisplay"></div>
-            <div class="user-badge admin" id="adminBadge" style="display:none">Admin</div>
-            <button class="logout-btn" onclick="handleLogout()">Logout</button>
-        </div>
+    <div class="user-badge" id="userDisplay"></div>
+    <div class="user-badge admin" id="adminBadge" style="display:none">Admin</div>
+
+    <div class="header-actions">
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" title="Toggle theme">
+            <span class="theme-icon sun-icon" aria-hidden="true">☀</span>
+            <span class="theme-icon moon-icon" aria-hidden="true">☾</span>
+            <span class="theme-toggle-label">Light Mode</span>
+        </button>
+
+        <button class="logout-btn" onclick="handleLogout()">Logout</button>
+    </div>
+</div>
     </div>
 
     <div class="content">
@@ -1149,7 +1158,34 @@
 </div>
 
 <script>
+const THEME_STORAGE_KEY = 'hourglass-theme';
 
+    function applySavedTheme() {
+        const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || 'dark';
+        document.body.setAttribute('data-theme', savedTheme);
+        updateThemeToggleLabel(savedTheme);
+    }
+
+    function updateThemeToggleLabel(theme) {
+        const btn = document.getElementById('themeToggle');
+        if (!btn) return;
+
+        const label = btn.querySelector('.theme-toggle-label');
+        if (label) {
+            label.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+        }
+    }
+
+    function toggleTheme() {
+        const currentTheme = document.body.getAttribute('data-theme') || 'dark';
+        const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+        document.body.setAttribute('data-theme', nextTheme);
+        localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+        updateThemeToggleLabel(nextTheme);
+    }
+
+    document.addEventListener('DOMContentLoaded', applySavedTheme);
     // ============================================================
     // TIMESHEET LOCK
     // ============================================================
@@ -1426,6 +1462,7 @@ let _ticketCurrentPage = 1;
         document.getElementById('timesheet').classList.add('active');
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelector('.tab-btn[data-tab="timesheet"]').classList.add('active');
+        updateThemeToggleLabel(document.body.getAttribute('data-theme') || 'dark');
     }
 
     // ============================================================

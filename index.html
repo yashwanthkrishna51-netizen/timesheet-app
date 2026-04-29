@@ -1,4 +1,4 @@
-​​<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -434,7 +434,6 @@
             .member-hours-widget { flex-wrap: wrap; }
         }
 
-
         /* Notes in pivot table cell */
         .cell-notes {
             display: block;
@@ -723,11 +722,11 @@
 
             <div class="section-title">Ticket-wise Consolidated View</div>
             <div class="ticket-table-controls">
-    <input type="text" id="ticketSearch" placeholder="🔍 Search by Ticket #ID..." oninput="filterTicketTable()">
-    <select id="ticketMemberFilter" onchange="filterTicketTable()">
+    <input type="text" id="ticketSearch" placeholder="🔍 Search by Ticket #ID..." oninput="debouncedFilterTicketTable()">
+    <select id="ticketMemberFilter" onchange="debouncedFilterTicketTable()">
         <option value="">All Members</option>
     </select>
-    <select id="ticketPageSize" onchange="filterTicketTable()">
+    <select id="ticketPageSize" onchange="debouncedFilterTicketTable()">
         <option value="10">10 per page</option>
         <option value="25">25 per page</option>
         <option value="50">50 per page</option>
@@ -745,7 +744,6 @@
     </table>
 </div>
 <div class="ticket-pagination" id="ticketPagination"></div>
-            <!-- <div class="ticket-cards" id="ticketCards"></div> -->
 
             <div class="section-title">Member Summary</div>
             <table class="summary-table">
@@ -818,103 +816,6 @@
 <script>
 
     // ============================================================
-    // TIMESHEET LOCK
-    // ============================================================
-
-    let _timesheetLockState = null; // cached: true=locked, false=unlocked
-
-    async function getLockSettings() {
-        try {
-            const content = await getFileFromGitHub(GITHUB_CONFIG.timesheetLockFile);
-            if (!content) return { locked: false };
-            return JSON.parse(content);
-        } catch(e) {
-            return { locked: false };
-        }
-    }
-
-    async function saveLockSettings(locked) {
-        const content = JSON.stringify({ locked, updatedAt: new Date().toISOString(), updatedBy: currentUser }, null, 2);
-        return await saveFileToGitHub(GITHUB_CONFIG.timesheetLockFile, content, `Timesheet lock ${locked ? 'enabled' : 'disabled'} by ${currentUser}`);
-    }
-
-    function isDateLocked(dateStr, locked) {
-        if (!locked) return false;
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        // Get Monday of current week
-        const dayOfWeek = today.getDay() || 7;
-        const monday = new Date(today);
-        monday.setDate(today.getDate() - dayOfWeek + 1);
-        monday.setHours(0,0,0,0);
-        const d = new Date(dateStr);
-        d.setHours(0,0,0,0);
-        return d < monday;
-    }
-
-    function applyLockToUI(locked) {
-        const banner = document.getElementById('lockBanner');
-        const inputs = document.querySelectorAll('#entriesBody input, #entriesBody button');
-        const addRowBtn = document.querySelector('.btn[onclick="addEntry()"]');
-        const saveBtn = document.querySelector('.btn[onclick="saveDay()"]');
-        if (locked) {
-            banner.classList.add('show');
-            inputs.forEach(el => el.disabled = true);
-            if (addRowBtn) addRowBtn.disabled = true;
-            if (saveBtn) saveBtn.disabled = true;
-        } else {
-            banner.classList.remove('show');
-            inputs.forEach(el => el.disabled = false);
-            if (addRowBtn) addRowBtn.disabled = false;
-            if (saveBtn) saveBtn.disabled = false;
-        }
-    }
-
-    async function toggleTimesheetLock() {
-        const btn = document.getElementById('lockToggleBtn');
-        btn.disabled = true;
-        showLoading('Updating lock settings...');
-        const current = await getLockSettings();
-        const newState = !current.locked;
-        await saveLockSettings(newState);
-        _timesheetLockState = newState;
-        renderLockStatus(newState);
-        hideLoading();
-        btn.disabled = false;
-        showSuccess(newState ? '🔒 Timesheets locked — only current week and future are editable.' : '🔓 Timesheets unlocked — all dates are editable.');
-    }
-
-    function renderLockStatus(locked) {
-        const pill = document.getElementById('lockStatusPill');
-        const btn = document.getElementById('lockToggleBtn');
-        if (!pill || !btn) return;
-        if (locked) {
-            pill.className = 'lock-status-pill locked';
-            pill.textContent = '🔒 Locked';
-            btn.className = 'btn btn-unlock';
-            btn.textContent = '🔓 Unlock Timesheets';
-        } else {
-            pill.className = 'lock-status-pill unlocked';
-            pill.textContent = '✅ Unlocked';
-            btn.className = 'btn btn-lock';
-            btn.textContent = '🔒 Lock Past Timesheets';
-        }
-    }
-
-    // ============================================================
-    // LOADING OVERLAY UTILS
-    // ============================================================
-
-    function showLoading(text = 'Loading...') {
-        document.querySelector('.loading-text').textContent = text;
-        document.getElementById('loadingOverlay').classList.add('show');
-    }
-
-    function hideLoading() {
-        document.getElementById('loadingOverlay').classList.remove('show');
-    }
-
-    // ============================================================
     // CONSTANTS
     // ============================================================
 
@@ -961,8 +862,258 @@
     let currentUserIsAdmin = false;
     let authToken = null;
     let _allTicketRows = [];
-let _filteredTicketRows = [];
-let _ticketCurrentPage = 1;
+    let _filteredTicketRows = [];
+    let _ticketCurrentPage = 1;
+
+    // ===== CACHING (OPTIMIZATION BLOCK 1) =====
+    let _cachedAllTimesheets = null;
+    let _cacheTime = 0;
+    let _ticketsCache = null;
+    let _filterTimeout = null;
+    let _timesheetLockState = null;
+
+    // ============================================================
+    // GITHUB API CONFIG
+    // ============================================================
+
+    const GITHUB_CONFIG = {
+        apiProxy: '/api/github-proxy',
+        timesheetsFile: 'data/timesheets.json',
+        ticketsFile: 'tickets/tickets.csv',
+        timesheetLockFile: 'data/timesheet_lock.json'
+    };
+
+    // ============================================================
+    // LOADING OVERLAY UTILS
+    // ============================================================
+
+    function showLoading(text = 'Loading...') {
+        document.querySelector('.loading-text').textContent = text;
+        document.getElementById('loadingOverlay').classList.add('show');
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingOverlay').classList.remove('show');
+    }
+
+    // ============================================================
+    // GITHUB API FUNCTIONS
+    // ============================================================
+
+    async function callGitHubProxy(action, filePath, content = null, message = null) {
+        try {
+            const response = await fetch(GITHUB_CONFIG.apiProxy, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action,
+                    filePath,
+                    content,
+                    message
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                console.error(`Proxy error (${action} ${filePath}):`, error);
+                throw new Error(error.error || `Proxy error: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error(`Failed to ${action} ${filePath}:`, error.message);
+            showSuccess('⚠ Error: ' + error.message, true);
+            throw error;
+        }
+    }
+
+    async function getFileFromGitHub(filePath) {
+        try {
+            const result = await callGitHubProxy('read', filePath);
+            if (result.data) {
+                return result.data;
+            }
+            return null;
+        } catch (error) {
+            console.error(`Error reading ${filePath}:`, error);
+            return null;
+        }
+    }
+
+    async function saveFileToGitHub(filePath, content, message) {
+        try {
+            const result = await callGitHubProxy('write', filePath, content, message);
+            return result.success;
+        } catch (error) {
+            console.error(`Error saving ${filePath}:`, error);
+            return false;
+        }
+    }
+
+    // ===== OPTIMIZATION BLOCK 2: CACHE getAllTimesheets =====
+    async function getAllTimesheetsFromGitHub() {
+        const now = Date.now();
+        // 60s cache TTL
+        if (_cachedAllTimesheets && now - _cacheTime < 60000) {
+            return _cachedAllTimesheets;
+        }
+        const content = await getFileFromGitHub(GITHUB_CONFIG.timesheetsFile);
+        if (!content) {
+            _cachedAllTimesheets = { lastUpdated: new Date().toISOString() };
+        } else {
+            try {
+                _cachedAllTimesheets = JSON.parse(content);
+            } catch (e) {
+                _cachedAllTimesheets = {};
+            }
+        }
+        _cacheTime = now;
+        return _cachedAllTimesheets;
+    }
+
+    // ===== OPTIMIZATION BLOCK 3: CACHE loadTicketsFromCSV =====
+    async function loadTicketsFromCSV() {
+        if (_ticketsCache) return _ticketsCache;
+        const csvContent = await getFileFromGitHub(GITHUB_CONFIG.ticketsFile);
+        if (!csvContent) {
+            _ticketsCache = [];
+        } else {
+            _ticketsCache = parseCSV(csvContent);
+        }
+        return _ticketsCache;
+    }
+
+    // ============================================================
+    // DATA ACCESS
+    // ============================================================
+
+    async function getTimesheetData(username) {
+        const allTimesheets = await getAllTimesheetsFromGitHub();
+        const raw = allTimesheets[username];
+        if (!raw) return {};
+        return migrateData(raw);
+    }
+
+    async function saveTimesheetData(username, data) {
+        const allTimesheets = await getAllTimesheetsFromGitHub();
+        allTimesheets[username] = data;
+        allTimesheets.lastUpdated = new Date().toISOString();
+
+        const content = JSON.stringify(allTimesheets, null, 2);
+        _cachedAllTimesheets = null; // Invalidate cache
+        return await saveFileToGitHub(
+            GITHUB_CONFIG.timesheetsFile,
+            content,
+            `Update timesheet for ${username}`
+        );
+    }
+
+    function parseCSV(csvContent) {
+        const lines = csvContent.trim().split('\n');
+        if (lines.length < 2) return [];
+
+        const headers = lines[0].split(',').map(h => h.trim());
+        const ticketIdIndex = headers.indexOf('Ticket ID');
+        const subjectIndex = headers.indexOf('Ticket Subject');
+
+        const tickets = [];
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line.trim()) continue;
+
+            const parts = parseCSVLine(line);
+            if (parts.length > Math.max(ticketIdIndex, subjectIndex)) {
+                const ticketId = parts[ticketIdIndex]?.trim() || '';
+                const subject = parts[subjectIndex]?.trim() || '';
+
+                if (ticketId) {
+                    tickets.push({
+                        id: ticketId,
+                        subject: subject,
+                        displayText: `${ticketId} - ${subject}`
+                    });
+                }
+            }
+        }
+
+        return tickets;
+    }
+
+    function parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let insideQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+
+            if (char === '"') {
+                insideQuotes = !insideQuotes;
+            } else if (char === ',' && !insideQuotes) {
+                result.push(current);
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+
+        result.push(current);
+        return result;
+    }
+
+    function getHappyFoxTicketUrl(ticketId) {
+        const strippedId = ticketId.replace(/\D/g, '');
+        return `https://askdarwin.darwinbox.com/staff/ticket/${strippedId}`;
+    }
+
+    let allTickets = [];
+
+    function getTicketMeta(ticketId) {
+        return allTickets.find(t => t.id === ticketId) || null;
+    }
+
+    function migrateData(data) {
+        const out = {};
+        for (const date in data) {
+            const val = data[date];
+            if (Array.isArray(val)) {
+                out[date] = val.map(e => {
+                    if (e.activityHours) return e;
+                    const ah = {};
+                    if (e.activity && e.hours) ah[e.activity] = parseFloat(e.hours) || 0;
+                    return { ticket: e.ticket||'', activityHours: ah, notes: e.notes||'' };
+                });
+            } else if (val && typeof val === 'object') {
+                if (val.hours || val.ticket || val.activity) {
+                    const ah = {};
+                    if (val.activity && val.hours) ah[val.activity] = parseFloat(val.hours) || 0;
+                    out[date] = [{ ticket: val.ticket||'', activityHours: ah, notes: val.notes||'' }];
+                }
+            }
+        }
+        return out;
+    }
+
+    function mergeTimesheetData(dest, source) {
+        for (const date in source) {
+            if (!dest[date]) {
+                dest[date] = source[date];
+            } else {
+                const existing = dest[date];
+                source[date].forEach(srcEntry => {
+                    const dup = existing.find(e =>
+                        e.ticket === srcEntry.ticket &&
+                        JSON.stringify(e.activityHours) === JSON.stringify(srcEntry.activityHours)
+                    );
+                    if (!dup) existing.push(srcEntry);
+                });
+            }
+        }
+        return dest;
+    }
+
     // ============================================================
     // AUTH
     // ============================================================
@@ -1141,223 +1292,81 @@ let _ticketCurrentPage = 1;
     }
 
     // ============================================================
-    // GITHUB API CONFIG
+    // TIMESHEET LOCK
     // ============================================================
 
-    const GITHUB_CONFIG = {
-        apiProxy: '/api/github-proxy',
-        timesheetsFile: 'data/timesheets.json',
-        ticketsFile: 'tickets/tickets.csv',
-        timesheetLockFile: 'data/timesheet_lock.json'
-    };
-
-    // ============================================================
-    // GITHUB API FUNCTIONS
-    // ============================================================
-
-    async function callGitHubProxy(action, filePath, content = null, message = null) {
+    async function getLockSettings() {
         try {
-            const response = await fetch(GITHUB_CONFIG.apiProxy, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    action,
-                    filePath,
-                    content,
-                    message
-                })
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                console.error(`Proxy error (${action} ${filePath}):`, error);
-                throw new Error(error.error || `Proxy error: ${response.status}`);
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error(`Failed to ${action} ${filePath}:`, error.message);
-            showSuccess('⚠ Error: ' + error.message, true);
-            throw error;
-        }
-    }
-
-    async function getFileFromGitHub(filePath) {
-        try {
-            const result = await callGitHubProxy('read', filePath);
-            if (result.data) {
-                return result.data;
-            }
-            return null;
-        } catch (error) {
-            console.error(`Error reading ${filePath}:`, error);
-            return null;
-        }
-    }
-
-    async function saveFileToGitHub(filePath, content, message) {
-        try {
-            const result = await callGitHubProxy('write', filePath, content, message);
-            return result.success;
-        } catch (error) {
-            console.error(`Error saving ${filePath}:`, error);
-            return false;
-        }
-    }
-
-    async function getAllTimesheetsFromGitHub() {
-        const content = await getFileFromGitHub(GITHUB_CONFIG.timesheetsFile);
-        if (!content) {
-            return {
-                lastUpdated: new Date().toISOString(),
-                yashwanth: {},
-                ved: {},
-                harsha: {},
-                bhalchandra: {}
-            };
-        }
-        try {
+            const content = await getFileFromGitHub(GITHUB_CONFIG.timesheetLockFile);
+            if (!content) return { locked: false };
             return JSON.parse(content);
-        } catch (e) {
-            console.error('Error parsing timesheets:', e);
-            return {};
+        } catch(e) {
+            return { locked: false };
         }
     }
 
-    // ============================================================
-    // DATA ACCESS
-    // ============================================================
-
-    async function getTimesheetData(username) {
-        const allTimesheets = await getAllTimesheetsFromGitHub();
-        const raw = allTimesheets[username];
-        if (!raw) return {};
-        return migrateData(raw);
+    async function saveLockSettings(locked) {
+        const content = JSON.stringify({ locked, updatedAt: new Date().toISOString(), updatedBy: currentUser }, null, 2);
+        return await saveFileToGitHub(GITHUB_CONFIG.timesheetLockFile, content, `Timesheet lock ${locked ? 'enabled' : 'disabled'} by ${currentUser}`);
     }
 
-    async function saveTimesheetData(username, data) {
-        const allTimesheets = await getAllTimesheetsFromGitHub();
-        allTimesheets[username] = data;
-        allTimesheets.lastUpdated = new Date().toISOString();
-
-        const content = JSON.stringify(allTimesheets, null, 2);
-        return await saveFileToGitHub(
-            GITHUB_CONFIG.timesheetsFile,
-            content,
-            `Update timesheet for ${username}`
-        );
+    function isDateLocked(dateStr, locked) {
+        if (!locked) return false;
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const dayOfWeek = today.getDay() || 7;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - dayOfWeek + 1);
+        monday.setHours(0,0,0,0);
+        const d = new Date(dateStr);
+        d.setHours(0,0,0,0);
+        return d < monday;
     }
 
-    async function loadTicketsFromCSV() {
-        const csvContent = await getFileFromGitHub(GITHUB_CONFIG.ticketsFile);
-        if (!csvContent) return [];
-        return parseCSV(csvContent);
-    }
-
-    function parseCSV(csvContent) {
-        const lines = csvContent.trim().split('\n');
-        if (lines.length < 2) return [];
-
-        const headers = lines[0].split(',').map(h => h.trim());
-        const ticketIdIndex = headers.indexOf('Ticket ID');
-        const subjectIndex = headers.indexOf('Ticket Subject');
-
-        const tickets = [];
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i];
-            if (!line.trim()) continue;
-
-            const parts = parseCSVLine(line);
-            if (parts.length > Math.max(ticketIdIndex, subjectIndex)) {
-                const ticketId = parts[ticketIdIndex]?.trim() || '';
-                const subject = parts[subjectIndex]?.trim() || '';
-
-                if (ticketId) {
-                    tickets.push({
-                        id: ticketId,
-                        subject: subject,
-                        displayText: `${ticketId} - ${subject}`
-                    });
-                }
-            }
+    function applyLockToUI(locked) {
+        const banner = document.getElementById('lockBanner');
+        const inputs = document.querySelectorAll('#entriesBody input, #entriesBody button');
+        const timesheetBtns = document.querySelectorAll('#timesheet .button-group .btn, #timesheet .button-group button');
+        if (locked) {
+            banner.classList.add('show');
+            inputs.forEach(el => el.disabled = true);
+            timesheetBtns.forEach(el => el.disabled = true);
+        } else {
+            banner.classList.remove('show');
+            inputs.forEach(el => el.disabled = false);
+            timesheetBtns.forEach(el => el.disabled = false);
         }
-
-        return tickets;
     }
 
-    function parseCSVLine(line) {
-        const result = [];
-        let current = '';
-        let insideQuotes = false;
+    async function toggleTimesheetLock() {
+        const btn = document.getElementById('lockToggleBtn');
+        btn.disabled = true;
+        showLoading('Updating lock settings...');
+        const current = await getLockSettings();
+        const newState = !current.locked;
+        await saveLockSettings(newState);
+        _timesheetLockState = newState;
+        renderLockStatus(newState);
+        hideLoading();
+        btn.disabled = false;
+        showSuccess(newState ? '🔒 Timesheets locked — only current week and future are editable.' : '🔓 Timesheets unlocked — all dates are editable.');
+    }
 
-        for (let i = 0; i < line.length; i++) {
-            const char = line[i];
-
-            if (char === '"') {
-                insideQuotes = !insideQuotes;
-            } else if (char === ',' && !insideQuotes) {
-                result.push(current);
-                current = '';
-            } else {
-                current += char;
-            }
+    function renderLockStatus(locked) {
+        const pill = document.getElementById('lockStatusPill');
+        const btn = document.getElementById('lockToggleBtn');
+        if (!pill || !btn) return;
+        if (locked) {
+            pill.className = 'lock-status-pill locked';
+            pill.textContent = '🔒 Locked';
+            btn.className = 'btn btn-unlock';
+            btn.textContent = '🔓 Unlock Timesheets';
+        } else {
+            pill.className = 'lock-status-pill unlocked';
+            pill.textContent = '✅ Unlocked';
+            btn.className = 'btn btn-lock';
+            btn.textContent = '🔒 Lock Past Timesheets';
         }
-
-        result.push(current);
-        return result;
-    }
-
-    function getHappyFoxTicketUrl(ticketId) {
-        const strippedId = ticketId.replace(/\D/g, '');
-        return `https://askdarwin.darwinbox.com/staff/ticket/${strippedId}`;
-    }
-
-    let allTickets = [];
-
-    function getTicketMeta(ticketId) {
-        return allTickets.find(t => t.id === ticketId) || null;
-    }
-
-    function migrateData(data) {
-        const out = {};
-        for (const date in data) {
-            const val = data[date];
-            if (Array.isArray(val)) {
-                out[date] = val.map(e => {
-                    if (e.activityHours) return e;
-                    const ah = {};
-                    if (e.activity && e.hours) ah[e.activity] = parseFloat(e.hours) || 0;
-                    return { ticket: e.ticket||'', activityHours: ah, notes: e.notes||'' };
-                });
-            } else if (val && typeof val === 'object') {
-                if (val.hours || val.ticket || val.activity) {
-                    const ah = {};
-                    if (val.activity && val.hours) ah[val.activity] = parseFloat(val.hours) || 0;
-                    out[date] = [{ ticket: val.ticket||'', activityHours: ah, notes: val.notes||'' }];
-                }
-            }
-        }
-        return out;
-    }
-
-    function mergeTimesheetData(dest, source) {
-        for (const date in source) {
-            if (!dest[date]) {
-                dest[date] = source[date];
-            } else {
-                const existing = dest[date];
-                source[date].forEach(srcEntry => {
-                    const dup = existing.find(e =>
-                        e.ticket === srcEntry.ticket &&
-                        JSON.stringify(e.activityHours) === JSON.stringify(srcEntry.activityHours)
-                    );
-                    if (!dup) existing.push(srcEntry);
-                });
-            }
-        }
-        return dest;
     }
 
     // ============================================================
@@ -1381,59 +1390,36 @@ let _ticketCurrentPage = 1;
     // MY TIMESHEET — DAY VIEW
     // ============================================================
 
-    // async function loadDayEntries1() {
-    //     showLoading('Loading entries...');
-    //     const date = document.getElementById('datePicker').value;
-    //     if (!date) {
-    //         hideLoading();
-    //         return;
-    //     }
-
-    //     const data = await getTimesheetData(currentUser);
-    //     const entries = data[date] || [];
-    //     const tbody = document.getElementById('entriesBody');
-    //     tbody.innerHTML = '';
-
-    //     if (entries.length === 0) {
-    //         renderEntryRow({ ticket: '', activityHours: {}, notes: '' });
-    //     } else {
-    //         entries.forEach(e => renderEntryRow(e));
-    //     }
-    //     updateDailyTotal();
-    //     hideLoading();
-    // }
     async function loadDayEntries() {
-    showLoading('Loading entries...');
-    const date = document.getElementById('datePicker').value;
-    if (!date) {
+        showLoading('Loading entries...');
+        const date = document.getElementById('datePicker').value;
+        if (!date) {
+            hideLoading();
+            return;
+        }
+
+        if (_timesheetLockState === null) {
+            const lockSettings = await getLockSettings();
+            _timesheetLockState = lockSettings.locked;
+        }
+
+        const data = await getTimesheetData(currentUser);
+        const entries = data[date] || [];
+        const tbody = document.getElementById('entriesBody');
+        tbody.innerHTML = '';
+
+        if (entries.length === 0) {
+            renderEntryRow({ ticket: '', activityHours: {}, notes: '' });
+        } else {
+            entries.forEach(e => renderEntryRow(e));
+        }
+        updateDailyTotal();
+
+        const locked = isDateLocked(date, _timesheetLockState);
+        applyLockToUI(locked);
+
         hideLoading();
-        return;
     }
-
-    // Fetch lock state (cached after first fetch)
-    if (_timesheetLockState === null) {
-        const lockSettings = await getLockSettings();
-        _timesheetLockState = lockSettings.locked;
-    }
-
-    const data = await getTimesheetData(currentUser);
-    const entries = data[date] || [];
-    const tbody = document.getElementById('entriesBody');
-    tbody.innerHTML = '';
-
-    if (entries.length === 0) {
-        renderEntryRow({ ticket: '', activityHours: {}, notes: '' });
-    } else {
-        entries.forEach(e => renderEntryRow(e));
-    }
-    updateDailyTotal();
-
-    // Apply lock UI based on selected date
-    const locked = isDateLocked(date, _timesheetLockState);
-    applyLockToUI(locked);
-
-    hideLoading();
-}
 
     function addEntry() {
         renderEntryRow({ ticket: '', activityHours: {}, notes: '' });
@@ -1496,26 +1482,20 @@ let _ticketCurrentPage = 1;
         badge.className = 'daily-total-badge' + (total >= 8 ? ' ok' : total > 0 ? ' warn' : '');
     }
 
-    // async function saveDay() {
-    //     const date = document.getElementById('datePicker').value;
-    //     if (!date) { alert('Please select a date.'); return; }
+    async function saveDay() {
+        const date = document.getElementById('datePicker').value;
+        if (!date) { alert('Please select a date.'); return; }
 
-    //     showLoading('Saving...');
-async function saveDay() {
-    const date = document.getElementById('datePicker').value;
-    if (!date) { alert('Please select a date.'); return; }
+        if (_timesheetLockState === null) {
+            const lockSettings = await getLockSettings();
+            _timesheetLockState = lockSettings.locked;
+        }
+        if (isDateLocked(date, _timesheetLockState)) {
+            alert('⛔ This date is locked. Past dates before the current week cannot be edited.');
+            return;
+        }
 
-    // Hard lock guard — prevents save even if UI was bypassed
-    if (_timesheetLockState === null) {
-        const lockSettings = await getLockSettings();
-        _timesheetLockState = lockSettings.locked;
-    }
-    if (isDateLocked(date, _timesheetLockState)) {
-        alert('⛔ This date is locked. Past dates before the current week cannot be edited.');
-        return;
-    }
-
-    showLoading('Saving...');
+        showLoading('Saving...');
         const entries = [];
         document.querySelectorAll('#entriesBody tr').forEach(row => {
             const ticket = row.querySelector('.entry-ticket').value.trim();
@@ -1569,26 +1549,26 @@ async function saveDay() {
         totalWorked = Math.round(totalWorked * 10) / 10;
 
         document.getElementById('workedHours').textContent = totalWorked + 'h';
-        // Activity breakdown pills in ribbon
-const _wActMap = {};
-days.forEach(day => {
-    (data[day.key] || []).forEach(e => {
-        Object.entries(e.activityHours || {}).forEach(([a, h]) => {
-            _wActMap[a] = (_wActMap[a] || 0) + (parseFloat(h) || 0);
+        const _wActMap = {};
+        days.forEach(day => {
+            (data[day.key] || []).forEach(e => {
+                Object.entries(e.activityHours || {}).forEach(([a, h]) => {
+                    _wActMap[a] = (_wActMap[a] || 0) + (parseFloat(h) || 0);
+                });
+            });
         });
-    });
-});
-const _wWidget = document.getElementById('hoursWidget');
-_wWidget.querySelectorAll('.act-pill-item').forEach(el => el.remove());
-Object.entries(_wActMap).sort((a,b) => b[1]-a[1]).forEach(([act, hrs]) => {
-    const pct = totalWorked > 0 ? Math.round((hrs/totalWorked)*100) : 0;
-    const item = document.createElement('div');
-    item.className = 'hw-item act-pill-item';
-    item.innerHTML = '<div class="hw-label">' + escHtml(act) + '</div>' +
-        '<div class="hw-value">' + Math.round(hrs*10)/10 + 'h</div>' +
-        '<div class="hw-pct">' + pct + '% of total</div>';
-    _wWidget.appendChild(item);
-});
+        const _wWidget = document.getElementById('hoursWidget');
+        _wWidget.querySelectorAll('.act-pill-item').forEach(el => el.remove());
+        Object.entries(_wActMap).sort((a,b) => b[1]-a[1]).forEach(([act, hrs]) => {
+            const pct = totalWorked > 0 ? Math.round((hrs/totalWorked)*100) : 0;
+            const item = document.createElement('div');
+            item.className = 'hw-item act-pill-item';
+            item.innerHTML = '<div class="hw-label">' + escHtml(act) + '</div>' +
+                '<div class="hw-value">' + Math.round(hrs*10)/10 + 'h</div>' +
+                '<div class="hw-pct">' + pct + '% of total</div>';
+            _wWidget.appendChild(item);
+        });
+
         const remaining = Math.round((40 - totalWorked) * 10) / 10;
         const remItem  = document.getElementById('remainingItem');
         const remLabel = document.getElementById('remainingLabel');
@@ -1641,7 +1621,6 @@ Object.entries(_wActMap).sort((a,b) => b[1]-a[1]).forEach(([act, hrs]) => {
                 dayTotals[idx] += hrs;
                 rowTotal += hrs;
                 const acts = [...actSet].join(', ');
-                // Collect notes for this cell
                 const cellNotes = [];
                 dayEntries.forEach(e => { if (e.notes && e.notes.trim()) cellNotes.push(e.notes.trim()); });
                 const uniqueNotes = [...new Set(cellNotes)];
@@ -1699,26 +1678,26 @@ Object.entries(_wActMap).sort((a,b) => b[1]-a[1]).forEach(([act, hrs]) => {
         totalWorked = Math.round(totalWorked * 10) / 10;
 
         document.getElementById('memberWorkedHours').textContent = totalWorked + 'h';
-        // Activity breakdown pills in ribbon
-const _mActMap = {};
-days.forEach(day => {
-    (data[day.key] || []).forEach(e => {
-        Object.entries(e.activityHours || {}).forEach(([a, h]) => {
-            _mActMap[a] = (_mActMap[a] || 0) + (parseFloat(h) || 0);
+        const _mActMap = {};
+        days.forEach(day => {
+            (data[day.key] || []).forEach(e => {
+                Object.entries(e.activityHours || {}).forEach(([a, h]) => {
+                    _mActMap[a] = (_mActMap[a] || 0) + (parseFloat(h) || 0);
+                });
+            });
         });
-    });
-});
-const _mWidget = document.getElementById('memberHoursWidget');
-_mWidget.querySelectorAll('.act-pill-item').forEach(el => el.remove());
-Object.entries(_mActMap).sort((a,b) => b[1]-a[1]).forEach(([act, hrs]) => {
-    const pct = totalWorked > 0 ? Math.round((hrs/totalWorked)*100) : 0;
-    const item = document.createElement('div');
-    item.className = 'hw-item act-pill-item';
-    item.innerHTML = '<div class="hw-label">' + escHtml(act) + '</div>' +
-        '<div class="hw-value">' + Math.round(hrs*10)/10 + 'h</div>' +
-        '<div class="hw-pct">' + pct + '% of total</div>';
-    _mWidget.appendChild(item);
-});
+        const _mWidget = document.getElementById('memberHoursWidget');
+        _mWidget.querySelectorAll('.act-pill-item').forEach(el => el.remove());
+        Object.entries(_mActMap).sort((a,b) => b[1]-a[1]).forEach(([act, hrs]) => {
+            const pct = totalWorked > 0 ? Math.round((hrs/totalWorked)*100) : 0;
+            const item = document.createElement('div');
+            item.className = 'hw-item act-pill-item';
+            item.innerHTML = '<div class="hw-label">' + escHtml(act) + '</div>' +
+                '<div class="hw-value">' + Math.round(hrs*10)/10 + 'h</div>' +
+                '<div class="hw-pct">' + pct + '% of total</div>';
+            _mWidget.appendChild(item);
+        });
+
         const remaining = Math.round((40 - totalWorked) * 10) / 10;
         const remItem  = document.getElementById('memberRemainingItem');
         const remLabel = document.getElementById('memberRemainingLabel');
@@ -1771,7 +1750,6 @@ Object.entries(_mActMap).sort((a,b) => b[1]-a[1]).forEach(([act, hrs]) => {
                 dayTotals[idx] += hrs;
                 rowTotal += hrs;
                 const acts = [...actSet].join(', ');
-                // Collect notes for this cell
                 const cellNotes = [];
                 dayEntries.forEach(e => { if (e.notes && e.notes.trim()) cellNotes.push(e.notes.trim()); });
                 const uniqueNotes = [...new Set(cellNotes)];
@@ -1800,21 +1778,25 @@ Object.entries(_mActMap).sort((a,b) => b[1]-a[1]).forEach(([act, hrs]) => {
     }
 
     // ============================================================
-    // TEAM ANALYTICS
+    // TEAM ANALYTICS — OPTIMIZATION BLOCK 4: BATCH LOAD
     // ============================================================
 
     async function loadAdminDashboard() {
-        showLoading('Loading admin dashboard...');
+        showLoading('Loading analytics...');
         const from = document.getElementById('filterFrom').value;
         const to   = document.getElementById('filterTo').value;
+
+        // ===== SINGLE BATCH CALL INSTEAD OF 22 INDIVIDUAL CALLS =====
+        const allTimesheets = await getAllTimesheetsFromGitHub();
 
         let totalHrs = 0;
         const ticketMap = {};
         const memberMap = {};
         const teamActMap = {};
 
-        for (const member of TEAM_MEMBERS) {
-            const data = await getTimesheetData(member);
+        for (const member in allTimesheets) {
+            if (member === 'lastUpdated') continue;
+            const data = migrateData(allTimesheets[member]);
             let memberTotal = 0;
             let memberEntries = 0;
 
@@ -1894,86 +1876,25 @@ Object.entries(_mActMap).sort((a,b) => b[1]-a[1]).forEach(([act, hrs]) => {
             });
         }
 
-        // Ticket cards
         // Populate member filter dropdown
-const tmf = document.getElementById('ticketMemberFilter');
-tmf.innerHTML = '<option value="">All Members</option>';
-Object.keys(memberMap).sort().forEach(m => {
-    const opt = document.createElement('option');
-    opt.value = m; opt.textContent = m;
-    tmf.appendChild(opt);
-});
+        const tmf = document.getElementById('ticketMemberFilter');
+        tmf.innerHTML = '<option value="">All Members</option>';
+        Object.keys(memberMap).sort().forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m; opt.textContent = m;
+            tmf.appendChild(opt);
+        });
 
-// Build flat ticket rows for paginated table
-_allTicketRows = Object.entries(ticketMap)
-    .filter(([t]) => t !== '(no ticket)')
-    .sort((a, b) => b[1].totalHours - a[1].totalHours)
-    .map(([ticket, info]) => ({ ticket, info }));
-if (ticketMap['(no ticket)']) {
-    _allTicketRows.push({ ticket: '(no ticket)', info: ticketMap['(no ticket)'] });
-}
-_ticketCurrentPage = 1;
-filterTicketTable();
-        // const ticketCards = document.getElementById('ticketCards');
-        // ticketCards.innerHTML = '';
-        // if (Object.keys(ticketMap).length === 0) {
-        //     ticketCards.innerHTML = '<div class="no-data">No ticket data for the selected period.</div>';
-        // } else {
-        //     Object.entries(ticketMap).sort((a,b) => b[1].totalHours - a[1].totalHours).forEach(([ticket, tdata]) => {
-        //         const card = document.createElement('div');
-        //         card.className = 'ticket-card';
-
-        //         let bodyHtml = '<table class="summary-table"><thead><tr><th>Member</th>';
-        //         ACTIVITY_TYPES.forEach(a => {
-        //             if (Object.values(tdata.members).some(m => m.acts[a])) {
-        //                 bodyHtml += '<th class="num-col">' + escHtml(a) + '</th>';
-        //             }
-        //         });
-        //         bodyHtml += '<th class="num-col">Total</th><th>Notes / Comments</th></tr></thead><tbody>';
-
-        //         const relevantActs = ACTIVITY_TYPES.filter(a =>
-        //             Object.values(tdata.members).some(m => m.acts[a])
-        //         );
-
-        //         Object.entries(tdata.members).sort((a,b) => {
-        //             const ta = Object.values(a[1].acts).reduce((s,h)=>s+h,0);
-        //             const tb = Object.values(b[1].acts).reduce((s,h)=>s+h,0);
-        //             return tb - ta;
-        //         }).forEach(([mem, mdata]) => {
-        //             const memTotal = Object.values(mdata.acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
-        //             const memberNotesList = mdata.notes || [];
-        //             const notesDisplay = memberNotesList.length > 0
-        //                 ? memberNotesList.map(n => escHtml(n)).join('<br>')
-        //                 : '<span style="color:#ccc;font-size:11px">—</span>';
-        //             bodyHtml += '<tr><td>' + escHtml(mem) + '</td>';
-        //             relevantActs.forEach(a => {
-        //                 bodyHtml += '<td class="num-col">' + (mdata.acts[a] ? (Math.round(mdata.acts[a]*10)/10)+'h' : '—') + '</td>';
-        //             });
-        //             bodyHtml += '<td class="num-col"><strong>' + (Math.round(memTotal*10)/10) + 'h</strong></td>';
-        //             bodyHtml += '<td class="notes-td">' + notesDisplay + '</td></tr>';
-        //         });
-        //         bodyHtml += '</tbody></table>';
-
-        //         const url = getHappyFoxTicketUrl(ticket);
-        //         const ticketMeta = getTicketMeta(ticket);
-        //         const ticketSubject = ticketMeta?.subject || '';
-
-        //         card.innerHTML =
-        //             '<div class="ticket-card-header" onclick="toggleCard(this)">' +
-        //             '<div class="ticket-card-header-left">' +
-        //             '<div class="ticket-main">' +
-        //             '<span class="ticket-id"><a href="' + url + '" target="_blank">' + escHtml(ticket) + ' 🔗</a></span>' +
-        //             (ticketSubject ? '<div class="ticket-subject">' + escHtml(ticketSubject) + '</div>' : '') +
-        //             '</div>' +
-        //             '<span class="ticket-total">' + (Math.round(tdata.totalHours*10)/10) + 'h total</span>' +
-        //             '</div>' +
-        //             '<span class="expand-icon">▼</span>' +
-        //             '</div>' +
-        //             '<div class="ticket-card-body">' + bodyHtml + '</div>';
-
-        //         ticketCards.appendChild(card);
-        //     });
-        // }
+        // Build flat ticket rows for paginated table
+        _allTicketRows = Object.entries(ticketMap)
+            .filter(([t]) => t !== '(no ticket)')
+            .sort((a, b) => b[1].totalHours - a[1].totalHours)
+            .map(([ticket, info]) => ({ ticket, info }));
+        if (ticketMap['(no ticket)']) {
+            _allTicketRows.push({ ticket: '(no ticket)', info: ticketMap['(no ticket)'] });
+        }
+        _ticketCurrentPage = 1;
+        filterTicketTable();
 
         // Member summary
         const mBody = document.getElementById('memberSummary');
@@ -2004,13 +1925,6 @@ filterTicketTable();
         hideLoading();
     }
 
-    function toggleCard(header) {
-        const body = header.nextElementSibling;
-        const icon = header.querySelector('.expand-icon');
-        body.classList.toggle('open');
-        icon.classList.toggle('open');
-    }
-
     function clearAnalyticsFilter() {
         document.getElementById('filterFrom').value = '';
         document.getElementById('filterTo').value = '';
@@ -2018,13 +1932,123 @@ filterTicketTable();
     }
 
     // ============================================================
+    // TICKET TABLE — OPTIMIZATION BLOCK 5: DEBOUNCED FILTER
+    // ============================================================
+
+    function debouncedFilterTicketTable() {
+        clearTimeout(_filterTimeout);
+        _filterTimeout = setTimeout(() => {
+            filterTicketTable();
+        }, 200);
+    }
+
+    function filterTicketTable() {
+        const search = (document.getElementById('ticketSearch').value || '').toLowerCase();
+        const member = document.getElementById('ticketMemberFilter').value;
+        const pageSize = parseInt(document.getElementById('ticketPageSize').value) || 10;
+
+        _filteredTicketRows = _allTicketRows.filter(row => {
+            const matchSearch = !search || row.ticket.toLowerCase().includes(search);
+            const matchMember = !member || Object.keys(row.info.members || {}).includes(member);
+            return matchSearch && matchMember;
+        });
+
+        const totalPages = Math.max(1, Math.ceil(_filteredTicketRows.length / pageSize));
+        if (_ticketCurrentPage > totalPages) _ticketCurrentPage = 1;
+        renderTicketTable(pageSize, totalPages);
+    }
+
+    function renderTicketTable(pageSize, totalPages) {
+        const start = (_ticketCurrentPage - 1) * pageSize;
+        const pageRows = _filteredTicketRows.slice(start, start + pageSize);
+        const tbody = document.getElementById('ticketTableBody');
+
+        if (pageRows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="no-data">No tickets found.</td></tr>';
+        } else {
+            tbody.innerHTML = pageRows.map(({ ticket, info }) => {
+                const url = getHappyFoxTicketUrl(ticket);
+                const meta = getTicketMeta(ticket);
+                const subject = meta?.subject || '';
+                const membersHtml = Object.entries(info.members || {})
+                    .sort((a, b) => {
+                        const ta = Object.values(a[1].acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
+                        const tb = Object.values(b[1].acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
+                        return tb - ta;
+                    })
+                    .map(([m, md]) => {
+                        const actStr = Object.entries(md.acts || {})
+                            .sort((a,b) => b[1]-a[1])
+                            .map(([a, h]) => escHtml(a) + ' ' + Math.round(h*10)/10 + 'h')
+                            .join(', ');
+                        return '<div class="member-acts"><b>' + escHtml(m) + '</b>' +
+                            (actStr ? ': <span style="font-weight:400">' + actStr + '</span>' : '') + '</div>';
+                    }).join('');
+
+                const ticketActMap = {};
+                Object.values(info.members || {}).forEach(md => {
+                    Object.entries(md.acts || {}).forEach(([a, h]) => {
+                        ticketActMap[a] = (ticketActMap[a] || 0) + (parseFloat(h) || 0);
+                    });
+                });
+                const actBreakHtml = Object.entries(ticketActMap)
+                    .sort((a,b) => b[1]-a[1])
+                    .map(([a, h]) => {
+                        const pct = info.totalHours > 0 ? Math.round((h/info.totalHours)*100) : 0;
+                        return '<span class="act-pill" style="margin:2px 2px 2px 0;display:inline-block">' +
+                            escHtml(a) + ' <b>' + Math.round(h*10)/10 + 'h</b>' +
+                            ' <span style="opacity:.55;font-size:10px">(' + pct + '%)</span></span>';
+                    }).join('');
+
+                return '<tr>' +
+                    '<td><b>' + (ticket !== '(no ticket)' ?
+                        '<a href="' + url + '" target="_blank" style="color:#333;text-decoration:none">' + escHtml(ticket) + ' 🔗</a>' :
+                        '(no ticket)') + '</b>' +
+                    (subject ? '<div style="font-size:11px;color:#888;margin-top:2px">' + escHtml(subject) + '</div>' : '') +
+                    '</td>' +
+                    '<td>' + membersHtml + '</td>' +
+                    '<td class="num-col">' + Math.round(info.totalHours*10)/10 + 'h</td>' +
+                    '<td>' + (actBreakHtml || '<span style="color:#ccc">—</span>') + '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        // Pagination controls
+        const pag = document.getElementById('ticketPagination');
+        const from = _filteredTicketRows.length === 0 ? 0 : start + 1;
+        const to = Math.min(start + pageSize, _filteredTicketRows.length);
+        let pagHtml = '<span class="page-info">Showing ' + from + '–' + to + ' of ' + _filteredTicketRows.length + ' tickets</span>';
+        pagHtml += '<div class="page-btns">';
+        pagHtml += '<button class="page-btn" onclick="ticketPageNav(1)" ' + (_ticketCurrentPage===1?'disabled':'') + '>«</button>';
+        pagHtml += '<button class="page-btn" onclick="ticketPageNav(' + (_ticketCurrentPage-1) + ')" ' + (_ticketCurrentPage===1?'disabled':'') + '>‹</button>';
+        let startPage = Math.max(1, _ticketCurrentPage - 3);
+        let endPage = Math.min(totalPages, startPage + 6);
+        if (endPage - startPage < 6) startPage = Math.max(1, endPage - 6);
+        for (let p = startPage; p <= endPage; p++) {
+            pagHtml += '<button class="page-btn' + (p===_ticketCurrentPage?' active':'') + '" onclick="ticketPageNav(' + p + ')">' + p + '</button>';
+        }
+        pagHtml += '<button class="page-btn" onclick="ticketPageNav(' + (_ticketCurrentPage+1) + ')" ' + (_ticketCurrentPage===totalPages?'disabled':'') + '>›</button>';
+        pagHtml += '<button class="page-btn" onclick="ticketPageNav(' + totalPages + ')" ' + (_ticketCurrentPage===totalPages?'disabled':'') + '>»</button>';
+        pagHtml += '</div>';
+        pag.innerHTML = pagHtml;
+    }
+
+    function ticketPageNav(page) {
+        const pageSize = parseInt(document.getElementById('ticketPageSize').value) || 10;
+        const totalPages = Math.max(1, Math.ceil(_filteredTicketRows.length / pageSize));
+        _ticketCurrentPage = Math.max(1, Math.min(page, totalPages));
+        renderTicketTable(pageSize, totalPages);
+    }
+
+    // ============================================================
     // TAB SWITCHING
     // ============================================================
 
+    // ===== OPTIMIZATION BLOCK 6: EXCEL EXPORT REUSES CACHED DATA =====
     async function exportAnalyticsToExcel() {
         showLoading('Building Excel export + timesheets.json...');
 
-        // ── Collect raw timesheets data from GitHub for full notes access ──
+        // Reuse cached allTimesheets instead of fetching again
         const allTimesheets = await getAllTimesheetsFromGitHub();
 
         const wb = XLSX.utils.book_new();
@@ -2054,13 +2078,13 @@ filterTicketTable();
         });
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(actRows), 'Activity Breakdown');
 
-        // ── Sheet 3: Ticket Details with Notes per member ──
-        // Build a map: ticketId -> member -> { acts, notes[] }
+        // ── Sheet 3: Ticket Details ──
         const ticketMemberNotesMap = {};
         const filterFrom = document.getElementById('filterFrom').value;
         const filterTo   = document.getElementById('filterTo').value;
 
-        for (const member of TEAM_MEMBERS) {
+        for (const member in allTimesheets) {
+            if (member === 'lastUpdated') continue;
             const memberData = allTimesheets[member];
             if (!memberData) continue;
             const migrated = migrateData(memberData);
@@ -2089,50 +2113,16 @@ filterTicketTable();
         }
 
         const ticketRows = [['Ticket ID', 'Subject', 'Ticket URL', 'Total Hours', 'Member', ...ACTIVITY_TYPES, 'Notes / Comments']];
-        document.querySelectorAll('#ticketCards .ticket-card').forEach(card => {
-            const headerEl = card.querySelector('.ticket-id a');
-            const ticketId = headerEl ? headerEl.textContent.replace('🔗','').trim() : '';
-            const subjectEl = card.querySelector('.ticket-subject');
-            const subject = subjectEl ? subjectEl.textContent.trim() : '';
-            const url = headerEl ? headerEl.href : '';
-            const totalEl = card.querySelector('.ticket-total');
-            const total = totalEl ? totalEl.textContent.replace('h total','').trim() : '';
-
-            const bodyRows = card.querySelectorAll('.ticket-card-body tbody tr');
-            if (bodyRows.length === 0) {
-                ticketRows.push([ticketId, subject, url, total, '', ...ACTIVITY_TYPES.map(() => ''), '']);
-            } else {
-                bodyRows.forEach((tr, i) => {
-                    const tds = tr.querySelectorAll('td');
-                    const member = tds[0] ? tds[0].textContent.trim() : '';
-                    const table = tr.closest('table');
-                    const headerCells = table ? Array.from(table.querySelectorAll('thead th')) : [];
-                    const renderedActivities = headerCells.slice(1, headerCells.length - 1).map(th => th.textContent.trim());
-
-                    const actHours = ACTIVITY_TYPES.map(actName => {
-                        const colIdx = renderedActivities.indexOf(actName);
-                        if (colIdx === -1) return '';
-                        const cell = tds[colIdx + 1];
-                        return cell ? cell.textContent.trim().replace('h', '') : '';
-                    });
-
-                    // Get notes from the raw data map
-                    const memberNotes = (ticketMemberNotesMap[ticketId] && ticketMemberNotesMap[ticketId][member])
-                        ? ticketMemberNotesMap[ticketId][member].notes.join(' | ')
-                        : '';
-
-                    ticketRows.push([
-                        i === 0 ? ticketId : '',
-                        i === 0 ? subject : '',
-                        i === 0 ? url : '',
-                        i === 0 ? total : '',
-                        member,
-                        ...actHours,
-                        memberNotes
-                    ]);
-                });
+        document.querySelectorAll('#ticketTableBody tr').forEach(row => {
+            const tds = row.querySelectorAll('td');
+            if (tds.length >= 4) {
+                const ticketLink = tds[0].querySelector('a');
+                const ticketId = ticketLink ? ticketLink.textContent.replace('🔗','').trim() : tds[0].textContent.trim();
+                const url = ticketLink ? ticketLink.href : '';
+                ticketRows.push([ticketId, '', url, tds[2].textContent.trim().replace('h',''), '', ...ACTIVITY_TYPES.map(() => ''), '']);
             }
         });
+
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ticketRows), 'Ticket Details');
 
         // ── Sheet 4: Member Summary ──
@@ -2152,7 +2142,8 @@ filterTicketTable();
 
         // ── Sheet 5: All Notes / Comments (flat log) ──
         const notesRows = [['Date', 'Member', 'Ticket ID', 'Notes / Comments', ...ACTIVITY_TYPES]];
-        for (const member of TEAM_MEMBERS) {
+        for (const member in allTimesheets) {
+            if (member === 'lastUpdated') continue;
             const memberData = allTimesheets[member];
             if (!memberData) continue;
             const migrated = migrateData(memberData);
@@ -2180,7 +2171,8 @@ filterTicketTable();
 
         // ── Sheet 6: Raw Entries (all data flat) ──
         const rawRows = [['Date', 'Member', 'Ticket ID', 'Notes', ...ACTIVITY_TYPES, 'Total Hours']];
-        for (const member of TEAM_MEMBERS) {
+        for (const member in allTimesheets) {
+            if (member === 'lastUpdated') continue;
             const memberData = allTimesheets[member];
             if (!memberData) continue;
             const migrated = migrateData(memberData);
@@ -2265,9 +2257,9 @@ filterTicketTable();
     async function openAdminExportModal() {
         showLoading('Preparing admin export...');
         const allData = {};
-        for (const m of TEAM_MEMBERS) {
-            const d = await getTimesheetData(m);
-            if (Object.keys(d).length > 0) allData[m] = d;
+        const allTimesheets = await getAllTimesheetsFromGitHub();
+        for (const m in allTimesheets) {
+            if (m !== 'lastUpdated') allData[m] = allTimesheets[m];
         }
         const exportObj = {
             exportDate: new Date().toISOString(),
@@ -2425,275 +2417,7 @@ filterTicketTable();
             if (e.target === document.getElementById(id)) closeModal(id);
         });
     });
-    // ============================================================
-// TICKET TABLE PAGINATION
-// ============================================================
 
-function filterTicketTable() {
-    const search = (document.getElementById('ticketSearch').value || '').toLowerCase();
-    const member = document.getElementById('ticketMemberFilter').value;
-    const pageSize = parseInt(document.getElementById('ticketPageSize').value) || 10;
-
-    _filteredTicketRows = _allTicketRows.filter(row => {
-        const matchSearch = !search || row.ticket.toLowerCase().includes(search);
-        const matchMember = !member || Object.keys(row.info.members || {}).includes(member);
-        return matchSearch && matchMember;
-    });
-
-    const totalPages = Math.max(1, Math.ceil(_filteredTicketRows.length / pageSize));
-    if (_ticketCurrentPage > totalPages) _ticketCurrentPage = 1;
-    renderTicketTable(pageSize, totalPages);
-}
-
-function renderTicketTable(pageSize, totalPages) {
-    const start = (_ticketCurrentPage - 1) * pageSize;
-    const pageRows = _filteredTicketRows.slice(start, start + pageSize);
-    const tbody = document.getElementById('ticketTableBody');
-
-    if (pageRows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="no-data">No tickets found.</td></tr>';
-    } else {
-        tbody.innerHTML = pageRows.map(({ ticket, info }) => {
-            const url = getHappyFoxTicketUrl(ticket);
-            const meta = getTicketMeta(ticket);
-            const subject = meta?.subject || '';
-            const membersHtml = Object.entries(info.members || {})
-                .sort((a, b) => {
-                    const ta = Object.values(a[1].acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
-                    const tb = Object.values(b[1].acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
-                    return tb - ta;
-                })
-                .map(([m, md]) => {
-                    const actStr = Object.entries(md.acts || {})
-                        .sort((a,b) => b[1]-a[1])
-                        .map(([a, h]) => escHtml(a) + ' ' + Math.round(h*10)/10 + 'h')
-                        .join(', ');
-                    return '<div class="member-acts"><b>' + escHtml(m) + '</b>' +
-                        (actStr ? ': <span style="font-weight:400">' + actStr + '</span>' : '') + '</div>';
-                }).join('');
-
-            const ticketActMap = {};
-            Object.values(info.members || {}).forEach(md => {
-                Object.entries(md.acts || {}).forEach(([a, h]) => {
-                    ticketActMap[a] = (ticketActMap[a] || 0) + (parseFloat(h) || 0);
-                });
-            });
-            const actBreakHtml = Object.entries(ticketActMap)
-                .sort((a,b) => b[1]-a[1])
-                .map(([a, h]) => {
-                    const pct = info.totalHours > 0 ? Math.round((h/info.totalHours)*100) : 0;
-                    return '<span class="act-pill" style="margin:2px 2px 2px 0;display:inline-block">' +
-                        escHtml(a) + ' <b>' + Math.round(h*10)/10 + 'h</b>' +
-                        ' <span style="opacity:.55;font-size:10px">(' + pct + '%)</span></span>';
-                }).join('');
-
-            return '<tr>' +
-                '<td><b>' + (ticket !== '(no ticket)' ?
-                    '<a href="' + url + '" target="_blank" style="color:#333;text-decoration:none">' + escHtml(ticket) + ' 🔗</a>' :
-                    '(no ticket)') + '</b>' +
-                (subject ? '<div style="font-size:11px;color:#888;margin-top:2px">' + escHtml(subject) + '</div>' : '') +
-                '</td>' +
-                '<td>' + membersHtml + '</td>' +
-                '<td class="num-col">' + Math.round(info.totalHours*10)/10 + 'h</td>' +
-                '<td>' + (actBreakHtml || '<span style="color:#ccc">—</span>') + '</td>' +
-                '</tr>';
-        }).join('');
-    }
-
-    // Pagination controls
-    const pag = document.getElementById('ticketPagination');
-    const from = _filteredTicketRows.length === 0 ? 0 : start + 1;
-    const to = Math.min(start + pageSize, _filteredTicketRows.length);
-    let pagHtml = '<span class="page-info">Showing ' + from + '–' + to + ' of ' + _filteredTicketRows.length + ' tickets</span>';
-    pagHtml += '<div class="page-btns">';
-    pagHtml += '<button class="page-btn" onclick="ticketPageNav(1)" ' + (_ticketCurrentPage===1?'disabled':'') + '>«</button>';
-    pagHtml += '<button class="page-btn" onclick="ticketPageNav(' + (_ticketCurrentPage-1) + ')" ' + (_ticketCurrentPage===1?'disabled':'') + '>‹</button>';
-    let startPage = Math.max(1, _ticketCurrentPage - 3);
-    let endPage = Math.min(totalPages, startPage + 6);
-    if (endPage - startPage < 6) startPage = Math.max(1, endPage - 6);
-    for (let p = startPage; p <= endPage; p++) {
-        pagHtml += '<button class="page-btn' + (p===_ticketCurrentPage?' active':'') + '" onclick="ticketPageNav(' + p + ')">' + p + '</button>';
-    }
-    pagHtml += '<button class="page-btn" onclick="ticketPageNav(' + (_ticketCurrentPage+1) + ')" ' + (_ticketCurrentPage===totalPages?'disabled':'') + '>›</button>';
-    pagHtml += '<button class="page-btn" onclick="ticketPageNav(' + totalPages + ')" ' + (_ticketCurrentPage===totalPages?'disabled':'') + '>»</button>';
-    pagHtml += '</div>';
-    pag.innerHTML = pagHtml;
-}
-
-function ticketPageNav(page) {
-    const pageSize = parseInt(document.getElementById('ticketPageSize').value) || 10;
-    const totalPages = Math.max(1, Math.ceil(_filteredTicketRows.length / pageSize));
-    _ticketCurrentPage = Math.max(1, Math.min(page, totalPages));
-    renderTicketTable(pageSize, totalPages);
-}
-    // ============================================================
-// TIMESHEET LOCK
-// ============================================================
-
-async function getLockSettings() {
-    try {
-        const content = await getFileFromGitHub(GITHUB_CONFIG.timesheetLockFile);
-        if (!content) return { locked: false };
-        return JSON.parse(content);
-    } catch(e) { return { locked: false }; }
-}
-
-async function saveLockSettings(locked) {
-    const content = JSON.stringify({ locked, updatedAt: new Date().toISOString(), updatedBy: currentUser }, null, 2);
-    return await saveFileToGitHub(GITHUB_CONFIG.timesheetLockFile, content,
-        `Timesheet lock ${locked ? 'enabled' : 'disabled'} by ${currentUser}`);
-}
-
-function isDateLocked(dateStr, locked) {
-    if (!locked) return false;
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const dayOfWeek = today.getDay() || 7;
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - dayOfWeek + 1);
-    monday.setHours(0,0,0,0);
-    const d = new Date(dateStr);
-    d.setHours(0,0,0,0);
-    return d < monday;
-}
-
-function applyLockToUI(locked) {
-    const banner = document.getElementById('lockBanner');
-    const inputs = document.querySelectorAll('#entriesBody input, #entriesBody button');
-    const timesheetBtns = document.querySelectorAll('#timesheet .button-group .btn, #timesheet .button-group button');
-    if (locked) {
-        banner.classList.add('show');
-        inputs.forEach(el => el.disabled = true);
-        timesheetBtns.forEach(el => el.disabled = true);
-    } else {
-        banner.classList.remove('show');
-        inputs.forEach(el => el.disabled = false);
-        timesheetBtns.forEach(el => el.disabled = false);
-    }
-}
-
-async function toggleTimesheetLock() {
-    const btn = document.getElementById('lockToggleBtn');
-    btn.disabled = true;
-    showLoading('Updating lock settings...');
-    const current = await getLockSettings();
-    const newState = !current.locked;
-    await saveLockSettings(newState);
-    _timesheetLockState = newState;
-    renderLockStatus(newState);
-    hideLoading();
-    btn.disabled = false;
-    showSuccess(newState
-        ? '🔒 Timesheets locked — only current week and future are editable.'
-        : '🔓 Timesheets unlocked — all dates are editable.');
-}
-
-function renderLockStatus(locked) {
-    const pill = document.getElementById('lockStatusPill');
-    const btn = document.getElementById('lockToggleBtn');
-    if (!pill || !btn) return;
-    if (locked) {
-        pill.className = 'lock-status-pill locked';
-        pill.textContent = '🔒 Locked';
-        btn.className = 'btn btn-unlock';
-        btn.textContent = '🔓 Unlock Timesheets';
-    } else {
-        pill.className = 'lock-status-pill unlocked';
-        pill.textContent = '✅ Unlocked';
-        btn.className = 'btn btn-lock';
-        btn.textContent = '🔒 Lock Past Timesheets';
-    }
-}
-
-// ============================================================
-// TICKET TABLE PAGINATION
-// ============================================================
-
-function filterTicketTable() {
-    const search = (document.getElementById('ticketSearch').value || '').toLowerCase();
-    const member = document.getElementById('ticketMemberFilter').value;
-    const pageSize = parseInt(document.getElementById('ticketPageSize').value) || 10;
-    _filteredTicketRows = _allTicketRows.filter(row => {
-        const matchSearch = !search || row.ticket.toLowerCase().includes(search);
-        const matchMember = !member || Object.keys(row.info.members || {}).includes(member);
-        return matchSearch && matchMember;
-    });
-    const totalPages = Math.max(1, Math.ceil(_filteredTicketRows.length / pageSize));
-    if (_ticketCurrentPage > totalPages) _ticketCurrentPage = 1;
-    renderTicketTable(pageSize, totalPages);
-}
-
-function renderTicketTable(pageSize, totalPages) {
-    const start = (_ticketCurrentPage - 1) * pageSize;
-    const pageRows = _filteredTicketRows.slice(start, start + pageSize);
-    const tbody = document.getElementById('ticketTableBody');
-    if (pageRows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="no-data">No tickets found.</td></tr>';
-    } else {
-        tbody.innerHTML = pageRows.map(({ ticket, info }) => {
-            const url = getHappyFoxTicketUrl(ticket);
-            const meta = getTicketMeta(ticket);
-            const subject = meta?.subject || '';
-            const membersHtml = Object.entries(info.members || {})
-                .sort((a,b) => {
-                    const ta = Object.values(a[1].acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
-                    const tb = Object.values(b[1].acts).reduce((s,h)=>s+(parseFloat(h)||0),0);
-                    return tb-ta;
-                })
-                .map(([m, md]) => {
-                    const actStr = Object.entries(md.acts||{}).sort((a,b)=>b[1]-a[1])
-                        .map(([a,h]) => escHtml(a)+' '+Math.round(h*10)/10+'h').join(', ');
-                    return '<div class="member-acts"><b>'+escHtml(m)+'</b>'+(actStr?': <span style="font-weight:400">'+actStr+'</span>':'')+' </div>';
-                }).join('');
-            const ticketActMap = {};
-            Object.values(info.members||{}).forEach(md => {
-                Object.entries(md.acts||{}).forEach(([a,h]) => {
-                    ticketActMap[a] = (ticketActMap[a]||0)+(parseFloat(h)||0);
-                });
-            });
-            const actBreakHtml = Object.entries(ticketActMap).sort((a,b)=>b[1]-a[1])
-                .map(([a,h]) => {
-                    const pct = info.totalHours>0?Math.round((h/info.totalHours)*100):0;
-                    return '<span class="act-pill" style="margin:2px 2px 2px 0;display:inline-block">'+
-                        escHtml(a)+' <b>'+Math.round(h*10)/10+'h</b>'+
-                        ' <span style="opacity:.55;font-size:10px">('+pct+'%)</span></span>';
-                }).join('');
-            return '<tr>'+
-                '<td><b>'+(ticket!=='(no ticket)'?
-                    '<a href="'+url+'" target="_blank" style="color:#333;text-decoration:none">'+escHtml(ticket)+' 🔗</a>':
-                    '(no ticket)')+'</b>'+
-                (subject?'<div style="font-size:11px;color:#888;margin-top:2px">'+escHtml(subject)+'</div>':'')+
-                '</td>'+
-                '<td>'+membersHtml+'</td>'+
-                '<td class="num-col">'+Math.round(info.totalHours*10)/10+'h</td>'+
-                '<td>'+(actBreakHtml||'<span style="color:#ccc">—</span>')+'</td>'+
-                '</tr>';
-        }).join('');
-    }
-    const pag = document.getElementById('ticketPagination');
-    const from = _filteredTicketRows.length===0?0:start+1;
-    const to = Math.min(start+pageSize, _filteredTicketRows.length);
-    let pagHtml = '<span class="page-info">Showing '+from+'–'+to+' of '+_filteredTicketRows.length+' tickets</span>';
-    pagHtml += '<div class="page-btns">';
-    pagHtml += '<button class="page-btn" onclick="ticketPageNav(1)" '+(_ticketCurrentPage===1?'disabled':'')+'>«</button>';
-    pagHtml += '<button class="page-btn" onclick="ticketPageNav('+(_ticketCurrentPage-1)+')" '+(_ticketCurrentPage===1?'disabled':'')+'>‹</button>';
-    let sp = Math.max(1,_ticketCurrentPage-3), ep = Math.min(totalPages,sp+6);
-    if(ep-sp<6) sp=Math.max(1,ep-6);
-    for(let p=sp;p<=ep;p++){
-        pagHtml+='<button class="page-btn'+(p===_ticketCurrentPage?' active':'')+'" onclick="ticketPageNav('+p+')">'+p+'</button>';
-    }
-    pagHtml += '<button class="page-btn" onclick="ticketPageNav('+(_ticketCurrentPage+1)+')" '+(_ticketCurrentPage===totalPages?'disabled':'')+'>›</button>';
-    pagHtml += '<button class="page-btn" onclick="ticketPageNav('+totalPages+')" '+(_ticketCurrentPage===totalPages?'disabled':'')+'>»</button>';
-    pagHtml += '</div>';
-    pag.innerHTML = pagHtml;
-}
-
-function ticketPageNav(page) {
-    const pageSize = parseInt(document.getElementById('ticketPageSize').value)||10;
-    const totalPages = Math.max(1,Math.ceil(_filteredTicketRows.length/pageSize));
-    _ticketCurrentPage = Math.max(1,Math.min(page,totalPages));
-    renderTicketTable(pageSize,totalPages);
-}
 </script>
 </body>
 </html>
